@@ -52,6 +52,7 @@
     <h1>⏱ Staff Timeclock</h1>
     <div class="clock" id="clock">--:--:--</div>
     <div class="date" id="date"></div>
+    <div id="locstatus" style="font-size:13px;text-align:center;margin:-8px 0 8px;color:#667">📍 Checking location…</div>
 
     <label for="staff">Who are you?</label>
     <select id="staff"><option value="">Loading staff…</option></select>
@@ -60,7 +61,7 @@
 
     <label for="pin">Access code (PIN)</label>
     <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="For payslip &amp; first-time setup">
-    <button class="reg" id="btnReg" onclick="registerFingerprint()">👆 Register this phone's fingerprint</button>
+    <button class="reg" id="btnReg" onclick="registerFingerprint()">🔓 Register this phone (fingerprint / face / phone PIN)</button>
 
     <div class="cam-box">
       <video id="video" autoplay playsinline muted></video>
@@ -73,7 +74,7 @@
       <button class="in" id="btnIn" onclick="punch('IN')" disabled>TIME IN</button>
       <button class="out" id="btnOut" onclick="punch('OUT')" disabled>TIME OUT</button>
     </div>
-    <button class="finish" id="btnFinish" onclick="openCameraApp()">📷 Take selfie to finish</button>
+    <button class="finish" id="btnFinish">🔓 Confirm it's you</button>
 
     <div class="spin" id="spin">Working…</div>
     <div class="msg" id="msg"></div>
@@ -173,12 +174,12 @@
       }
       if (s.fp) {
         st.className = 'fpstatus yes';
-        st.textContent = '👆 Fingerprint registered — tap TIME IN / TIME OUT and scan your finger.';
+        st.textContent = '🔓 Phone registered — tap TIME IN / TIME OUT, then unlock with your fingerprint, face, iris or phone PIN.';
         $('btnReg').style.display = 'none';
         prefetchChallenge();
       } else {
         st.className = 'fpstatus no';
-        st.textContent = 'Fingerprint not set up yet. Enter your PIN, then tap “Register this phone’s fingerprint”.';
+        st.textContent = 'This phone is not set up yet. Enter your PIN, then tap “Register this phone”.';
         $('btnReg').style.display = 'block';
       }
     }
@@ -275,73 +276,107 @@
         canvas.width = 480; canvas.height = Math.round(480 * img.height / img.width);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(img.src);
-        $('btnFinish').style.display = 'none';
-        sendPunch(canvas.toDataURL('image/jpeg', 0.7));
+        if (!pending) return;
+        pending.selfie = canvas.toDataURL('image/jpeg', 0.7);
+        continueAfterSelfie(false);
       };
       img.onerror = () => showMsg('Could not read the photo. Please try again.', false);
       img.src = URL.createObjectURL(f);
     });
 
-    // ---- punch ----
+    // ---- punch: 1) selfie (while camera is live)  2) phone unlock  3) location  4) send ----
+    let punching = false;
     function punch(type) {
       const s = currentStaff();
-      if (!s) return;
+      if (!s || punching) return;
       $('btnFinish').style.display = 'none';
-      if (s.fp) {
-        if (!chal || chal.staffId !== s.id || Date.now() - chal.at > 4 * 60 * 1000) {
-          prefetchChallenge();
-          showMsg('Getting ready… please tap ' + (type === 'IN' ? 'TIME IN' : 'TIME OUT') + ' again in 2 seconds.', false);
-          return;
-        }
-        const c = chal; chal = null;
-        navigator.credentials.get({ publicKey: {
-          challenge: b64uToBuf(c.challenge),
-          rpId: location.hostname,
-          allowCredentials: c.credIds.map(id => ({ type: 'public-key', id: b64uToBuf(id), transports: ['internal'] })),
-          userVerification: 'required', timeout: 60000
-        } }).then(a => {
-          pending = { type: type, pin: '', assertion: {
-            credId: bufToB64u(a.rawId),
-            clientDataJSON: bufToB64u(a.response.clientDataJSON),
-            authenticatorData: bufToB64u(a.response.authenticatorData),
-            signature: bufToB64u(a.response.signature)
-          } };
-          afterAuth();
-        }).catch(e => {
-          prefetchChallenge();
-          showMsg(e.name === 'NotAllowedError' ? 'Fingerprint scan cancelled or not recognized. Please try again.' : ('Fingerprint error: ' + e.message), false);
-        });
-      } else {
-        const pin = $('pin').value.trim();
-        if (!pin) { showMsg('Please enter your PIN (or register your fingerprint).', false); return; }
-        pending = { type: type, pin: pin, assertion: null };
-        afterAuth();
+      if (!s.fp && !$('pin').value.trim()) { showMsg('Please enter your PIN (or register your phone first).', false); return; }
+      if (s.fp && (!chal || chal.staffId !== s.id || Date.now() - chal.at > 4 * 60 * 1000)) {
+        prefetchChallenge();
+        showMsg('Getting ready… please tap ' + (type === 'IN' ? 'TIME IN' : 'TIME OUT') + ' again in 2 seconds.', false);
+        return;
       }
+      pending = { type: type, pin: s.fp ? '' : $('pin').value.trim(), assertion: null, selfie: captureSelfie() };
+      if (!pending.selfie) {
+        // No live camera preview on this phone: take the selfie with the camera app first
+        showMsg('Take your selfie…', true);
+        openCameraApp();
+        return;
+      }
+      continueAfterSelfie(true);
     }
 
-    function afterAuth() {
-      const selfie = captureSelfie();
-      if (selfie) { sendPunch(selfie); return; }
-      // No live camera: a second tap is needed to open the camera app
-      $('btnFinish').style.display = 'block';
-      showMsg(pending.assertion ? 'Fingerprint OK ✔ — now tap “Take selfie to finish”.' : 'Now tap “Take selfie to finish”.', true);
+    // viaTap = we are still inside the staff member's tap (needed by some phones for the unlock prompt)
+    function continueAfterSelfie(viaTap) {
+      const s = currentStaff();
+      if (!s || !pending) return;
+      if (!s.fp) { sendPunch(); return; }
+      if (!viaTap) {
+        const b = $('btnFinish');
+        b.textContent = '🔓 Confirm it’s you (fingerprint / face / phone PIN)';
+        b.onclick = () => { b.style.display = 'none'; verifyThenSend(); };
+        b.style.display = 'block';
+        showMsg('Selfie OK ✔ — now tap the green button below to confirm it’s you.', true);
+        return;
+      }
+      verifyThenSend();
     }
 
-    function sendPunch(selfie) {
+    function verifyThenSend() {
+      const s = currentStaff();
+      if (!s || !pending) return;
+      if (!chal || chal.staffId !== s.id || Date.now() - chal.at > 4 * 60 * 1000) {
+        prefetchChallenge();
+        $('btnFinish').style.display = 'block';
+        showMsg('Getting ready… tap the button again in 2 seconds.', false);
+        return;
+      }
+      const c = chal; chal = null;
+      navigator.credentials.get({ publicKey: {
+        challenge: b64uToBuf(c.challenge),
+        rpId: location.hostname,
+        allowCredentials: c.credIds.map(id => ({ type: 'public-key', id: b64uToBuf(id) })),
+        userVerification: 'required', timeout: 60000
+      } }).then(a => {
+        if (!pending) return;
+        pending.assertion = {
+          credId: bufToB64u(a.rawId),
+          clientDataJSON: bufToB64u(a.response.clientDataJSON),
+          authenticatorData: bufToB64u(a.response.authenticatorData),
+          signature: bufToB64u(a.response.signature)
+        };
+        sendPunch();
+      }).catch(e => {
+        pending = null;
+        prefetchChallenge();
+        showMsg(e.name === 'NotAllowedError' ? 'Phone unlock was cancelled or not recognized. Please tap TIME IN / OUT again.' : ('Unlock error: ' + e.message), false);
+      });
+    }
+
+    function sendPunch() {
       const s = currentStaff();
       if (!s || !pending) return;
       const p = pending; pending = null;
-      setBusy(true);
+      punching = true; setBusy(true);
+      $('spin').textContent = 'Getting your location…';
       getLocation(loc => {
-        api('punch', { staffId: s.id, type: p.type, selfie: selfie, loc: loc, pin: p.pin, assertion: p.assertion })
+        if (!loc) {
+          punching = false; setBusy(false); prefetchChallenge(); checkLocationStatus();
+          showMsg('📍 Location is OFF or blocked. Turn on Location/GPS on your phone and allow location for this page, then tap again.', false);
+          return;
+        }
+        $('spin').textContent = 'Recording your punch…';
+        api('punch', { staffId: s.id, type: p.type, selfie: p.selfie, loc: loc, pin: p.pin, assertion: p.assertion }, 60000)
           .then(res => {
-            setBusy(false);
+            punching = false; setBusy(false);
             showMsg(res.message, res.ok);
             if (res.ok) $('pin').value = '';
             prefetchChallenge();
           })
-          .catch(e => { setBusy(false); showMsg('Network error — punch NOT recorded. Please try again. (' + e.message + ')', false); prefetchChallenge(); });
+          .catch(e => { punching = false; setBusy(false); showMsg('Network error — punch NOT recorded. Please try again. (' + e.message + ')', false); prefetchChallenge(); });
       });
+      // the unlock screen can stop the camera on some phones: restart it for next time
+      if (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended')) startCam();
     }
 
     function getLocation(cb) {
@@ -351,9 +386,20 @@
       navigator.geolocation.getCurrentPosition(
         pos => finish({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) }),
         () => finish(null),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
-      setTimeout(() => finish(null), 9000);
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+      setTimeout(() => finish(null), 16000);
     }
+
+    // Shows whether location is on, and triggers the phone's "allow location" prompt early
+    function checkLocationStatus() {
+      const el = $('locstatus');
+      if (!navigator.geolocation) { el.textContent = '📍 This phone cannot share location.'; el.style.color = '#b00020'; return; }
+      navigator.geolocation.getCurrentPosition(
+        p => { el.textContent = '📍 Location ON (±' + Math.round(p.coords.accuracy) + ' m)'; el.style.color = '#166534'; },
+        () => { el.textContent = '📍 Location is OFF or blocked — turn it on to clock in'; el.style.color = '#b00020'; },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    }
+    checkLocationStatus();
 
     function setBusy(b) {
       $('spin').style.display = b ? 'block' : 'none';
