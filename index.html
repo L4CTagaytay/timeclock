@@ -155,7 +155,7 @@
         <button onclick="loadWorkSched('current')">This Cutoff</button>
         <button onclick="loadWorkSched('next')">Next Cutoff</button>
       </div>
-      <div id="wsOut" class="note" style="font-size:12px;color:#667;margin-top:8px">Loading schedule…</div>
+      <div id="wsOut" class="note" style="font-size:12px;color:#667;margin-top:8px">🔒 Enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.</div>
     </div>
 
     <label>My Time Record</label>
@@ -601,12 +601,16 @@
         let r2 = '';
         p.days.forEach(d => {
           r2 += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td><td>' + esc(d.in) + '</td><td>' + esc(d.out) + '</td>' +
-            '<td>' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : '') + '</td></tr>';
+            '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : (d.hours || 0).toFixed(2)) + '</td></tr>';
         });
         el.innerHTML = '<h3>' + esc(p.name) + '</h3>' +
           '<div class="sub">Cutoff: ' + esc(p.cutoff) + '</div>' +
-          '<table><tr><th>Date</th><th>Time In</th><th>Time Out</th><th></th></tr>' + r2 + '</table>' +
-          '<div class="totals"><div><span>Days worked</span><span>' + p.daysWorked + '</span></div></div>' +
+          '<table><tr><th>Date</th><th>Time In</th><th>Time Out</th><th class="r">Hours</th></tr>' + r2 + '</table>' +
+          '<div class="totals"><div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+          '<div><span>Regular hours</span><span>' + (p.regHours || 0).toFixed(2) + '</span></div>' +
+          (p.otHours ? '<div><span>Overtime hours</span><span>' + p.otHours.toFixed(2) + '</span></div>' : '') +
+          '<div class="gross"><span>TOTAL HOURS WORKED</span><span>' + (p.totalHours || 0).toFixed(2) + '</span></div></div>' +
+          '<div style="font-size:11px;color:#667;margin-top:6px">Hours counted for pay: after late rounding, store/shift closing time and the unpaid break.</div>' +
           (p.incomplete ? '<div class="warn">' + p.incomplete + ' day(s) missing IN or OUT. Please tell the admin.</div>' : '');
         $('pin').value = '';
         return;
@@ -767,8 +771,10 @@
     function shortShift(v) { const p = v.split('-'); return shortTime(p[0]) + '–' + shortTime(p[1]); }
     function firstName(n) { return String(n).split(' ')[0]; }
     function loadWorkSched(which) {
+      const s = currentStaff(), pin = $('pin').value.trim();
+      if (!s || !pin) { $('wsOut').innerHTML = '<span style="color:#b00020">Pick your name and enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.</span>'; return; }
       $('wsOut').innerHTML = 'Loading schedule…';
-      const go = () => api('schedule', { which: which || 'current' }, 40000);
+      const go = () => api('schedule', { which: which || 'current', staffId: s.id, pin: pin }, 40000);
       go().catch(e => /Unexpected reply/.test(e.message) ? new Promise(r => setTimeout(r, 1500)).then(go) : Promise.reject(e)).then(g => {
         if (!g.ok) { $('wsOut').innerHTML = esc(g.message || 'Could not load schedule.'); return; }
         let h = '<div style="margin-bottom:6px;color:#334">' + esc(g.label) + ': ' + esc(g.start) + ' to ' + esc(g.end) + '</div>';
@@ -782,7 +788,6 @@
         $('wsOut').innerHTML = h + '</table></div>';
       }).catch(e => { $('wsOut').innerHTML = 'Could not load schedule (' + esc(e.message) + ').'; });
     }
-    setTimeout(() => loadWorkSched('current'), 1500);
 
     // shift text -> 'HH:MM-HH:MM', '' (off) or null (invalid)
     function normShift(s) {
@@ -847,6 +852,9 @@
         amsg('schMsg', r.message, r.ok); if (r.ok) loadAdminSched();
       }).catch(e => amsg('schMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
+    // hide the schedule again when another name is picked
+    $('staff').addEventListener('change', () => { $('wsOut').innerHTML = '🔒 Enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.'; });
+
     // ===================== INSTALLABLE APP =====================
     let installEvt = null;
     const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
