@@ -31,6 +31,14 @@
     .msg { margin-top: 16px; padding: 14px; border-radius: 12px; font-size: 15px; text-align: center; display: none; }
     .msg.ok { display: block; background: #dcfce7; color: #14532d; }
     .msg.err { display: block; background: #fee2e2; color: #7f1d1d; }
+    .result { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+    .result .box { background: #fff; border-radius: 18px; padding: 26px 20px; width: 100%; max-width: 360px; text-align: center; }
+    .result .big { font-size: 30px; font-weight: 800; margin: 6px 0 10px; }
+    .result.ok .big { color: #16a34a; } .result.bad .big { color: #dc2626; }
+    .result .icon { font-size: 54px; }
+    .result .detail { font-size: 15px; color: #334; margin-bottom: 8px; }
+    .result .again { font-size: 15px; font-weight: 700; color: #b91c1c; margin-bottom: 8px; }
+    .result button { margin-top: 10px; width: 100%; padding: 14px; font-size: 17px; border: 0; border-radius: 12px; color: #fff; background: #1a73e8; }
     .spin { display: none; text-align: center; margin-top: 16px; color: #1a73e8; font-weight: 600; }
     .slip-btns { display: flex; gap: 12px; }
     .slip-btns button { padding: 12px 0; font-size: 14px; background: #1a73e8; }
@@ -78,6 +86,10 @@
 
     <div class="spin" id="spin">Working…</div>
     <div class="msg" id="msg"></div>
+    <div class="result" id="result" onclick="if(event.target===this)closeResult()"><div class="box">
+      <div class="icon" id="resIcon"></div><div class="big" id="resTitle"></div>
+      <div class="detail" id="resDetail"></div><div class="again" id="resAgain"></div>
+      <button onclick="closeResult()">OK</button></div></div>
 
     <label>My Time Record</label>
     <div class="slip-btns">
@@ -280,7 +292,7 @@
         pending.selfie = canvas.toDataURL('image/jpeg', 0.7);
         continueAfterSelfie(false);
       };
-      img.onerror = () => showMsg('Could not read the photo. Please try again.', false);
+      img.onerror = () => punchResult(false, 'Could not read the selfie photo.');
       img.src = URL.createObjectURL(f);
     });
 
@@ -349,7 +361,7 @@
       }).catch(e => {
         pending = null;
         prefetchChallenge();
-        showMsg(e.name === 'NotAllowedError' ? 'Phone unlock was cancelled or not recognized. Please tap TIME IN / OUT again.' : ('Unlock error: ' + e.message), false);
+        punchResult(false, e.name === 'NotAllowedError' ? 'Phone unlock was cancelled or not recognized.' : ('Unlock error: ' + e.message));
       });
     }
 
@@ -362,18 +374,18 @@
       getLocation(loc => {
         if (!loc) {
           punching = false; setBusy(false); prefetchChallenge(); checkLocationStatus();
-          showMsg('📍 Location is OFF or blocked. Turn on Location/GPS on your phone and allow location for this page, then tap again.', false);
+          punchResult(false, '📍 Location is OFF or blocked. Turn on Location/GPS and allow location for this page.');
           return;
         }
         $('spin').textContent = 'Recording your punch…';
         api('punch', { staffId: s.id, type: p.type, selfie: p.selfie, loc: loc, pin: p.pin, assertion: p.assertion }, 60000)
           .then(res => {
             punching = false; setBusy(false);
-            showMsg(res.message, res.ok);
+            punchResult(!!res.ok, res.message || (res.ok ? '' : 'The server did not accept the punch.'));
             if (res.ok) $('pin').value = '';
             prefetchChallenge();
           })
-          .catch(e => { punching = false; setBusy(false); showMsg('Network error — punch NOT recorded. Please try again. (' + e.message + ')', false); prefetchChallenge(); });
+          .catch(e => { punching = false; setBusy(false); punchResult(false, 'No connection to the server (' + e.message + '). Check your internet.'); prefetchChallenge(); });
       });
       // the unlock screen can stop the camera on some phones: restart it for next time
       if (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended')) startCam();
@@ -406,6 +418,20 @@
       ['btnIn', 'btnOut', 'btnReg'].forEach(id => $(id).disabled = b);
       if (!b) { const has = !!currentStaff(); $('btnIn').disabled = !has; $('btnOut').disabled = !has; }
     }
+
+    // Big pop-up after every TIME IN / TIME OUT attempt
+    function punchResult(ok, detail) {
+      const r = $('result');
+      r.className = 'result ' + (ok ? 'ok' : 'bad');
+      $('resIcon').textContent = ok ? '✅' : '❌';
+      $('resTitle').textContent = ok ? 'SUCCESSFUL!' : 'UNSUCCESSFUL!';
+      $('resDetail').textContent = detail || '';
+      $('resAgain').textContent = ok ? '' : 'Your time was NOT recorded. Please try again.';
+      r.style.display = 'flex';
+      try { if (navigator.vibrate) navigator.vibrate(ok ? 120 : [120, 80, 120]); } catch (e) {}
+      showMsg((ok ? 'SUCCESSFUL! ' : 'UNSUCCESSFUL! ') + (detail || '') + (ok ? '' : ' Please try again.'), ok);
+    }
+    function closeResult() { $('result').style.display = 'none'; }
 
     function showMsg(text, ok) { const m = $('msg'); m.textContent = text; m.className = 'msg ' + (ok ? 'ok' : 'err'); }
 
