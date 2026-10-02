@@ -370,9 +370,14 @@
 
     // ---- punch: 1) selfie (while camera is live)  2) phone unlock  3) location  4) send ----
     let punching = false;
+    // Wake the server up early: its first answer after a pause can fail, so a punch never goes first
+    function warmUp() { api('staff', {}, 40000).catch(() => {}); }
+    setInterval(warmUp, 240000);
+
     function punch(type) {
       const s = currentStaff();
       if (!s || punching) return;
+      warmUp();
       $('btnFinish').style.display = 'none';
       if (!s.fp && !$('pin').value.trim()) { showMsg('Please enter your PIN (or register your phone first).', false); return; }
       if (s.fp && (!chal || chal.staffId !== s.id || Date.now() - chal.at > 4 * 60 * 1000)) {
@@ -457,7 +462,7 @@
             if (res.ok) $('pin').value = '';
             prefetchChallenge();
           })
-          .catch(e => { punching = false; setBusy(false); punchResult(false, 'No connection to the server (' + e.message + '). Check your internet.'); prefetchChallenge(); });
+          .catch(e => { punching = false; setBusy(false); punchResult(false, /Unexpected reply/.test(e.message) ? 'The server did not confirm your punch. Check My Time Record first — if your time is not there, try again.' : ('No connection to the server (' + e.message + '). Check your internet.')); prefetchChallenge(); });
       });
       // the unlock screen can stop the camera on some phones: restart it for next time
       if (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended')) startCam();
@@ -579,7 +584,14 @@
       $('navAdmin').className = v === 'admin' ? 'on' : '';
     }
     function amsg(id, text, ok) { const m = $(id); m.textContent = text; m.className = 'amsg ' + (ok ? 'ok' : 'err'); }
-    function adminCall(op, data, ms) { return api('admin', Object.assign({ op: op, code: adminCode }, data || {}), ms || 60000); }
+    function adminCall(op, data, ms) {
+      const body = Object.assign({ op: op, code: adminCode }, data || {});
+      // Google sometimes answers the first request with a temporary web page: retry once
+      return api('admin', body, ms || 60000).catch(e => {
+        if (/Unexpected reply/.test(e.message)) return new Promise(res => setTimeout(res, 1500)).then(() => api('admin', body, ms || 60000));
+        throw e;
+      });
+    }
     function adminLogin() {
       const c = $('admCode').value.trim();
       if (!c) return amsg('admLockMsg', 'Enter the admin access code.', false);
@@ -625,7 +637,7 @@
           h += '<tr class="tot"><td colspan="4">TOTAL ' + esc(c.label.split(' (')[0]) + '</td><td class="r">' + peso(c.total) + '</td></tr></table>';
         });
         h += '<div class="grand">MONTH TOTAL: ' + peso(r.monthTotal) + '</div>';
-        if (r.cutoffs.some(c => c.rows.some(x => x.incomplete))) h += '<div class="note">⚠ = a day with a missing TIME IN or OUT (not paid). Fix it in the TimeLog.</div>';
+        if (r.cutoffs.some(c => c.rows.some(x => x.incomplete))) h += '<div class="note">⚠ = a day with a missing TIME IN or OUT (not paid yet). If it is today, the staff member may still be on shift; otherwise fix it in the TimeLog.</div>';
         $('payOut').innerHTML = h;
       }).catch(e => { $('payOut').innerHTML = '<div style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
     }
