@@ -53,6 +53,30 @@
     .slip .totals div { display: flex; justify-content: space-between; padding: 3px 0; }
     .slip .gross { font-weight: 800; font-size: 16px; color: #16a34a; border-top: 2px solid #dde3ec; margin-top: 4px; padding-top: 8px !important; }
     .slip .warn { color: #b00020; font-size: 12px; margin-top: 8px; }
+    .topnav { display: flex; gap: 8px; margin-bottom: 10px; }
+    .topnav button { padding: 10px 0; font-size: 14px; background: #cbd5e1; color: #1e293b; border-radius: 10px; }
+    .topnav button.on { background: #1a73e8; color: #fff; }
+    .adm { font-size: 14px; color: #1a2a3a; }
+    .adm .card { background: #fff; border-radius: 14px; padding: 14px; margin-top: 12px; }
+    .adm input, .adm select { width: 100%; padding: 10px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .adm .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .adm .row > * { flex: 1; }
+    .adm .row .lbl { flex: 0 0 52px; font-weight: 700; }
+    .adm .btn { padding: 12px 0; font-size: 15px; background: #1a73e8; border-radius: 10px; width: 100%; margin-top: 10px; }
+    .adm .btn.gray { background: #64748b; } .adm .btn.red { background: #dc2626; } .adm .btn.green { background: #16a34a; }
+    .adm .subnav { display: flex; gap: 6px; margin-top: 10px; }
+    .adm .subnav button { padding: 10px 0; font-size: 13px; background: #e2e8f0; color: #1e293b; border-radius: 10px; }
+    .adm .subnav button.on { background: #0f766e; color: #fff; }
+    .adm table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 8px; }
+    .adm th, .adm td { border: 1px solid #dde3ec; padding: 5px 6px; text-align: left; }
+    .adm th { background: #eef3fd; font-size: 11px; } .adm td.r, .adm th.r { text-align: right; }
+    .adm tr.tot td { font-weight: 800; background: #f0fdf4; color: #166534; }
+    .adm .grand { font-size: 17px; font-weight: 800; color: #16a34a; text-align: right; margin-top: 10px; }
+    .adm .note { font-size: 12px; color: #667; margin-top: 6px; }
+    .adm .amsg { margin-top: 10px; padding: 10px; border-radius: 10px; font-size: 13px; display: none; }
+    .adm .amsg.ok { display: block; background: #dcfce7; color: #14532d; } .adm .amsg.err { display: block; background: #fee2e2; color: #7f1d1d; }
+    .adm .del { padding: 4px 8px; font-size: 12px; background: #dc2626; border-radius: 8px; flex: 0; }
+    .adm h4 { font-size: 14px; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -60,6 +84,8 @@
     <h1>⏱ Staff Timeclock</h1>
     <div class="clock" id="clock">--:--:--</div>
     <div class="date" id="date"></div>
+    <div class="topnav"><button id="navStaff" class="on" onclick="showView('staff')">👤 Staff</button><button id="navAdmin" onclick="showView('admin')">🔐 Admin</button></div>
+    <div id="staffView">
     <div id="locstatus" style="font-size:13px;text-align:center;margin:-8px 0 8px;color:#667">📍 Checking location…</div>
 
     <label for="staff">Who are you?</label>
@@ -97,6 +123,52 @@
       <button id="btnPrev" onclick="viewSlip('previous')" disabled>Last Cutoff</button>
     </div>
     <div class="slip" id="slip"></div>
+    </div>
+
+    <div id="adminView" class="adm" style="display:none">
+      <div class="card" id="admLock">
+        <b>Admin access</b>
+        <div class="note">Enter the admin access code to open the owner tools.</div>
+        <input id="admCode" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Admin access code" style="margin-top:8px">
+        <button class="btn" onclick="adminLogin()">Unlock</button>
+        <div class="amsg" id="admLockMsg"></div>
+      </div>
+      <div id="admPanel" style="display:none">
+        <div class="subnav">
+          <button id="subPay" class="on" onclick="adminTab('pay')">💰 Gross Pay</button>
+          <button id="subHours" onclick="adminTab('hours')">🕙 Store Hours</button>
+          <button id="subHol" onclick="adminTab('hol')">📅 Holidays</button>
+        </div>
+
+        <div class="card" id="tabPay">
+          <b>Gross pay per cutoff</b>
+          <div class="row"><input type="month" id="payMonth"><button class="btn" style="margin-top:0" onclick="loadSummary()">Show</button></div>
+          <div id="payOut" class="note">Pick a month and tap Show.</div>
+        </div>
+
+        <div class="card" id="tabHours" style="display:none">
+          <b>Store operating hours</b>
+          <div class="note">Time in/out pay rules (late rounding, pay stops at closing) follow these hours. Changes apply to every staff member's computation right away.</div>
+          <div id="hoursRows"></div>
+          <button class="btn green" onclick="saveHours()">Save store hours</button>
+          <div class="amsg" id="hoursMsg"></div>
+        </div>
+
+        <div class="card" id="tabHol" style="display:none">
+          <b>Holidays</b>
+          <div class="row"><select id="holYear" onchange="loadHolidays()"></select></div>
+          <div id="holList" class="note">Loading…</div>
+          <h4>Add / update a holiday</h4>
+          <div class="row"><input type="date" id="holDate"></div>
+          <div class="row"><select id="holType"><option value="REGULAR">Regular holiday (200%)</option><option value="SPECIAL">Special non-working (130%)</option></select></div>
+          <div class="row"><input type="text" id="holName" placeholder="Name, e.g. Bonifacio Day"></div>
+          <button class="btn green" onclick="addHolidayUI()">Add holiday</button>
+          <div class="amsg" id="holMsg"></div>
+        </div>
+
+        <button class="btn gray" onclick="adminLogout()">🔒 Lock admin</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -494,6 +566,124 @@
         '<div class="totals">' + lines + '</div>' +
         (p.incomplete ? '<div class="warn">' + p.incomplete + ' day(s) missing IN or OUT — not counted. Ask admin to fix TimeLog.</div>' : '');
       $('pin').value = '';
+    }
+    // ===================== ADMIN TAB =====================
+    let adminCode = '';
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const DAY_FULL = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+    const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function showView(v) {
+      $('staffView').style.display = v === 'staff' ? 'block' : 'none';
+      $('adminView').style.display = v === 'admin' ? 'block' : 'none';
+      $('navStaff').className = v === 'staff' ? 'on' : '';
+      $('navAdmin').className = v === 'admin' ? 'on' : '';
+    }
+    function amsg(id, text, ok) { const m = $(id); m.textContent = text; m.className = 'amsg ' + (ok ? 'ok' : 'err'); }
+    function adminCall(op, data, ms) { return api('admin', Object.assign({ op: op, code: adminCode }, data || {}), ms || 60000); }
+    function adminLogin() {
+      const c = $('admCode').value.trim();
+      if (!c) return amsg('admLockMsg', 'Enter the admin access code.', false);
+      adminCode = c;
+      amsg('admLockMsg', 'Checking…', true);
+      adminCall('login').then(r => {
+        if (!r.ok) { adminCode = ''; return amsg('admLockMsg', r.message || 'Wrong code.', false); }
+        $('admCode').value = ''; $('admLockMsg').className = 'amsg';
+        $('admLock').style.display = 'none'; $('admPanel').style.display = 'block';
+        const now = new Date();
+        $('payMonth').value = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+        const ys = $('holYear'); ys.innerHTML = '';
+        for (let y = now.getFullYear() - 1; y <= now.getFullYear() + 1; y++) ys.innerHTML += '<option' + (y === now.getFullYear() ? ' selected' : '') + '>' + y + '</option>';
+        adminTab('pay'); loadSummary();
+      }).catch(e => { adminCode = ''; amsg('admLockMsg', 'Connection error: ' + e.message, false); });
+    }
+    function adminLogout() {
+      adminCode = '';
+      $('admPanel').style.display = 'none'; $('admLock').style.display = 'block';
+      $('payOut').innerHTML = 'Pick a month and tap Show.';
+    }
+    function adminTab(t) {
+      [['pay', 'tabPay', 'subPay'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol']].forEach(x => {
+        $(x[1]).style.display = x[0] === t ? 'block' : 'none';
+        $(x[2]).className = x[0] === t ? 'on' : '';
+      });
+      if (t === 'hours') loadHours();
+      if (t === 'hol') loadHolidays();
+    }
+    function loadSummary() {
+      const m = $('payMonth').value;
+      $('payOut').innerHTML = '<div style="color:#1a73e8;font-weight:600">Computing gross pay… (may take up to 20 seconds)</div>';
+      adminCall('summary', { month: m }, 90000).then(r => {
+        if (!r.ok) { $('payOut').innerHTML = '<div style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        let h = '';
+        r.cutoffs.forEach(c => {
+          h += '<h4>' + esc(c.label) + ' &nbsp;<span style="font-weight:400;color:#667">' + esc(c.start) + ' to ' + esc(c.end) + '</span></h4>';
+          h += '<table><tr><th>Staff</th><th class="r">Days</th><th class="r">Hrs</th><th class="r">OT</th><th class="r">Gross</th></tr>';
+          if (!c.rows.length) h += '<tr><td colspan="5">No staff.</td></tr>';
+          c.rows.forEach(x => {
+            h += '<tr><td>' + esc(x.name) + (x.incomplete ? ' <span style="color:#b00020" title="missing punch">⚠</span>' : '') + '</td><td class="r">' + x.days + '</td><td class="r">' + (x.regHours + (x.holidayHours || 0)).toFixed(2) + '</td><td class="r">' + x.otHours.toFixed(2) + '</td><td class="r">' + peso(x.gross) + '</td></tr>';
+          });
+          h += '<tr class="tot"><td colspan="4">TOTAL ' + esc(c.label.split(' (')[0]) + '</td><td class="r">' + peso(c.total) + '</td></tr></table>';
+        });
+        h += '<div class="grand">MONTH TOTAL: ' + peso(r.monthTotal) + '</div>';
+        if (r.cutoffs.some(c => c.rows.some(x => x.incomplete))) h += '<div class="note">⚠ = a day with a missing TIME IN or OUT (not paid). Fix it in the TimeLog.</div>';
+        $('payOut').innerHTML = h;
+      }).catch(e => { $('payOut').innerHTML = '<div style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function loadHours() {
+      $('hoursRows').innerHTML = '<div class="note">Loading…</div>';
+      adminCall('getHours').then(r => {
+        if (!r.ok) { $('hoursRows').innerHTML = '<div style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        let h = '<div class="row" style="font-size:12px;color:#667"><span class="lbl"></span><span>Opens</span><span>Closes</span></div>';
+        DAYS.forEach(d => {
+          const v = String(r.hours[d] || '10:00-20:00').split('-');
+          h += '<div class="row"><span class="lbl">' + d + '</span><input type="time" id="ho_' + d + '" value="' + v[0] + '"><input type="time" id="hc_' + d + '" value="' + v[1] + '"></div>';
+        });
+        $('hoursRows').innerHTML = h;
+      }).catch(e => { $('hoursRows').innerHTML = '<div style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function saveHours() {
+      const hours = {};
+      for (const d of DAYS) {
+        const o = $('ho_' + d).value, c = $('hc_' + d).value;
+        if (!o || !c) return amsg('hoursMsg', DAY_FULL[d] + ': enter both opening and closing time.', false);
+        if (c <= o) return amsg('hoursMsg', DAY_FULL[d] + ': closing time must be after opening time.', false);
+        hours[d] = o + '-' + c;
+      }
+      if (!confirm('Save these store hours? Pay computations for all staff will use the new hours.')) return;
+      amsg('hoursMsg', 'Saving…', true);
+      adminCall('setHours', { hours: hours }).then(r => {
+        amsg('hoursMsg', r.message || (r.ok ? 'Saved.' : 'Not saved.'), r.ok);
+        if (r.ok) loadHours();
+      }).catch(e => amsg('hoursMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function loadHolidays() {
+      const y = $('holYear').value;
+      $('holList').innerHTML = 'Loading…';
+      adminCall('holidays', { year: y }).then(r => {
+        if (!r.ok) { $('holList').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        if (!r.holidays.length) { $('holList').innerHTML = 'No holidays for ' + esc(y) + ' yet.'; return; }
+        let h = '<table><tr><th>Date</th><th>Type</th><th>Name</th><th></th></tr>';
+        r.holidays.forEach(x => {
+          h += '<tr><td>' + esc(x.date) + '</td><td>' + (x.type === 'REGULAR' ? '<b style="color:#b45309">Regular</b>' : 'Special') + '</td><td>' + esc(x.name) + '</td>' +
+            '<td><button class="del" onclick="deleteHolidayUI(\'' + x.date + '\')">Remove</button></td></tr>';
+        });
+        $('holList').innerHTML = h + '</table>';
+      }).catch(e => { $('holList').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function addHolidayUI() {
+      const d = $('holDate').value, t = $('holType').value, n = $('holName').value.trim();
+      if (!d) return amsg('holMsg', 'Pick the holiday date.', false);
+      amsg('holMsg', 'Saving…', true);
+      adminCall('addHoliday', { date: d, type: t, name: n }).then(r => {
+        amsg('holMsg', r.message, r.ok);
+        if (r.ok) { $('holDate').value = ''; $('holName').value = ''; $('holYear').value = d.slice(0, 4); loadHolidays(); }
+      }).catch(e => amsg('holMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function deleteHolidayUI(d) {
+      if (!confirm('Remove the holiday on ' + d + '? Pay for that day will be computed as a normal day.')) return;
+      amsg('holMsg', 'Removing…', true);
+      adminCall('deleteHoliday', { date: d }).then(r => { amsg('holMsg', r.message, r.ok); loadHolidays(); })
+        .catch(e => amsg('holMsg', 'Connection error — NOT removed. ' + e.message, false));
     }
   </script>
 </body>
