@@ -77,6 +77,16 @@
     .adm .amsg.ok { display: block; background: #dcfce7; color: #14532d; } .adm .amsg.err { display: block; background: #fee2e2; color: #7f1d1d; }
     .adm .del { padding: 4px 8px; font-size: 12px; background: #dc2626; border-radius: 8px; flex: 0; }
     .adm h4 { font-size: 14px; margin-top: 12px; }
+    .wsched { margin-top: 14px; background: #fff; border-radius: 14px; padding: 12px; }
+    .wsched .scroll, .adm .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .wsched table, .adm table.grid { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+    .wsched th, .wsched td, .adm table.grid th, .adm table.grid td { border: 1px solid #dde3ec; padding: 4px 5px; text-align: center; white-space: nowrap; }
+    .wsched th, .adm table.grid th { background: #eef3fd; }
+    .wsched td.off { color: #b6bfcc; } .wsched td.on { color: #14532d; background: #f0fdf4; font-weight: 600; }
+    .wsched tr.today td { outline: 2px solid #1a73e8; outline-offset: -2px; }
+    .wsched td.dl, .adm table.grid td.dl { text-align: left; font-weight: 600; background: #f8fafc; }
+    .adm table.grid input { width: 92px; padding: 5px; font-size: 12px; border-radius: 6px; }
+    .adm table.grid input.bad { border-color: #dc2626; background: #fee2e2; }
   </style>
 </head>
 <body>
@@ -117,6 +127,15 @@
       <div class="detail" id="resDetail"></div><div class="again" id="resAgain"></div>
       <button onclick="closeResult()">OK</button></div></div>
 
+    <div class="wsched">
+      <b>📅 Work Schedule</b>
+      <div class="slip-btns" style="margin-top:8px">
+        <button onclick="loadWorkSched('current')">This Cutoff</button>
+        <button onclick="loadWorkSched('next')">Next Cutoff</button>
+      </div>
+      <div id="wsOut" class="note" style="font-size:12px;color:#667;margin-top:8px">Loading schedule…</div>
+    </div>
+
     <label>My Time Record</label>
     <div class="slip-btns">
       <button id="btnCur" onclick="viewSlip('current')" disabled>This Cutoff</button>
@@ -135,8 +154,9 @@
       </div>
       <div id="admPanel" style="display:none">
         <div class="subnav">
-          <button id="subPay" class="on" onclick="adminTab('pay')">💰 Gross Pay</button>
-          <button id="subHours" onclick="adminTab('hours')">🕙 Store Hours</button>
+          <button id="subPay" class="on" onclick="adminTab('pay')">💰 Pay</button>
+          <button id="subSched" onclick="adminTab('sched')">🗓 Schedule</button>
+          <button id="subHours" onclick="adminTab('hours')">🕙 Hours</button>
           <button id="subHol" onclick="adminTab('hol')">📅 Holidays</button>
         </div>
 
@@ -144,6 +164,22 @@
           <b>Gross pay per cutoff</b>
           <div class="row"><input type="month" id="payMonth"><button class="btn" style="margin-top:0" onclick="loadSummary()">Show</button></div>
           <div id="payOut" class="note">Pick a month and tap Show.</div>
+        </div>
+
+        <div class="card" id="tabSched" style="display:none">
+          <b>Staff work schedule (per cutoff)</b>
+          <div class="note">Only staff scheduled on a day can TIME IN / OUT that day (once a cutoff's schedule is saved). Each shift uses that person's own start/end for late and pay rules. Type shifts like <b>10-8</b>, <b>10:00-20:00</b> or <b>12pm-8pm</b>; leave blank = day off.</div>
+          <div class="row"><input type="month" id="schMonth"><select id="schHalf"><option value="1">1st (1–15)</option><option value="2">2nd (16–end)</option></select></div>
+          <button class="btn" onclick="loadAdminSched()">Load cutoff</button>
+          <div id="schBody" style="display:none">
+            <h4>Weekly pattern (default shifts)</h4>
+            <div class="scroll"><table class="grid" id="patTable"></table></div>
+            <div class="row"><button class="btn gray" style="margin-top:6px" onclick="savePatternsUI()">Save pattern</button><button class="btn" style="margin-top:6px" onclick="fillFromPattern()">Fill cutoff from pattern</button></div>
+            <h4 id="schTitle">Schedule</h4>
+            <div class="scroll"><table class="grid" id="schTable"></table></div>
+            <button class="btn green" onclick="saveAdminSched()">Save schedule</button>
+          </div>
+          <div class="amsg" id="schMsg"></div>
         </div>
 
         <div class="card" id="tabHours" style="display:none">
@@ -614,12 +650,13 @@
       $('payOut').innerHTML = 'Pick a month and tap Show.';
     }
     function adminTab(t) {
-      [['pay', 'tabPay', 'subPay'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol']].forEach(x => {
+      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol']].forEach(x => {
         $(x[1]).style.display = x[0] === t ? 'block' : 'none';
         $(x[2]).className = x[0] === t ? 'on' : '';
       });
       if (t === 'hours') loadHours();
       if (t === 'hol') loadHolidays();
+      if (t === 'sched' && !$('schMonth').value) { const n = new Date(); $('schMonth').value = n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2); $('schHalf').value = n.getDate() <= 15 ? '1' : '2'; loadAdminSched(); }
     }
     function loadSummary() {
       const m = $('payMonth').value;
@@ -696,6 +733,93 @@
       amsg('holMsg', 'Removing…', true);
       adminCall('deleteHoliday', { date: d }).then(r => { amsg('holMsg', r.message, r.ok); loadHolidays(); })
         .catch(e => amsg('holMsg', 'Connection error — NOT removed. ' + e.message, false));
+    }
+    // ===================== WORK SCHEDULE =====================
+    const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    function dowOf(d) { return new Date(d + 'T12:00:00Z').getUTCDay(); }
+    function shortTime(hm) { let [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'p' : 'a'; h = ((h + 11) % 12) + 1; return h + (m ? ':' + ('0' + m).slice(-2) : '') + ap; }
+    function shortShift(v) { const p = v.split('-'); return shortTime(p[0]) + '–' + shortTime(p[1]); }
+    function firstName(n) { return String(n).split(' ')[0]; }
+    function loadWorkSched(which) {
+      $('wsOut').innerHTML = 'Loading schedule…';
+      const go = () => api('schedule', { which: which || 'current' }, 40000);
+      go().catch(e => /Unexpected reply/.test(e.message) ? new Promise(r => setTimeout(r, 1500)).then(go) : Promise.reject(e)).then(g => {
+        if (!g.ok) { $('wsOut').innerHTML = esc(g.message || 'Could not load schedule.'); return; }
+        let h = '<div style="margin-bottom:6px;color:#334">' + esc(g.label) + ': ' + esc(g.start) + ' to ' + esc(g.end) + '</div>';
+        if (!g.posted) { $('wsOut').innerHTML = h + '<div>No schedule posted for this cutoff yet.</div>'; return; }
+        h += '<div class="scroll"><table><tr><th>Date</th>' + g.staff.map(s => '<th>' + esc(firstName(s.name)) + '</th>').join('') + '</tr>';
+        g.dates.forEach(d => {
+          const c = g.cells[d] || {};
+          h += '<tr class="' + (d === g.today ? 'today' : '') + '"><td class="dl">' + WD[dowOf(d)] + ' ' + d.slice(5).replace('-', '/') + '</td>' +
+            g.staff.map(s => c[s.id] ? '<td class="on">' + shortShift(c[s.id]) + '</td>' : '<td class="off">off</td>').join('') + '</tr>';
+        });
+        $('wsOut').innerHTML = h + '</table></div>';
+      }).catch(e => { $('wsOut').innerHTML = 'Could not load schedule (' + esc(e.message) + ').'; });
+    }
+    setTimeout(() => loadWorkSched('current'), 1500);
+
+    // shift text -> 'HH:MM-HH:MM', '' (off) or null (invalid)
+    function normShift(s) {
+      s = String(s || '').trim().toLowerCase();
+      if (!s || s === 'off' || s === '-') return '';
+      const m = s.replace(/\s+/g, '').replace(/[–—to]+/g, '-').match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?-(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
+      if (!m) return null;
+      const cv = (h, mi, ap) => { h = +h; mi = +(mi || 0); if (ap) { ap = ap[0]; if (ap === 'p' && h < 12) h += 12; if (ap === 'a' && h === 12) h = 0; } return h * 60 + mi; };
+      let a = cv(m[1], m[2], m[3]), b = cv(m[4], m[5], m[6]);
+      if (!m[3] && !m[6] && a < 7 * 60) a += 12 * 60; // e.g. 1-9 = 1pm-9pm
+      if (!m[6] && b <= a && b < 12 * 60) b += 12 * 60;
+      if (a >= 1440 || b >= 1440 || b <= a) return null;
+      const f = x => ('0' + Math.floor(x / 60)).slice(-2) + ':' + ('0' + (x % 60)).slice(-2);
+      return f(a) + '-' + f(b);
+    }
+    let schGrid = null;
+    const PD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    function loadAdminSched() {
+      amsg('schMsg', 'Loading…', true);
+      adminCall('getSchedule', { month: $('schMonth').value, half: $('schHalf').value }).then(g => {
+        if (!g.ok) return amsg('schMsg', g.message, false);
+        schGrid = g; $('schMsg').className = 'amsg'; $('schBody').style.display = 'block';
+        let p = '<tr><th>Staff</th>' + PD.map(d => '<th>' + d + '</th>').join('') + '</tr>';
+        g.staff.forEach(s => {
+          const pt = g.patterns[s.id] || {};
+          p += '<tr><td class="dl">' + esc(firstName(s.name)) + '</td>' + PD.map(d => '<td><input data-p="' + s.id + '|' + d + '" value="' + (pt[d] || '') + '" placeholder="off" onchange="markCell(this)"></td>').join('') + '</tr>';
+        });
+        $('patTable').innerHTML = p;
+        $('schTitle').textContent = 'Schedule ' + g.start + ' to ' + g.end + (g.posted ? '' : ' (not posted yet)');
+        let h = '<tr><th>Date</th>' + g.staff.map(s => '<th>' + esc(firstName(s.name)) + '</th>').join('') + '</tr>';
+        g.dates.forEach(d => {
+          const c = g.cells[d] || {};
+          h += '<tr><td class="dl">' + WD[dowOf(d)] + ' ' + d.slice(5).replace('-', '/') + '</td>' + g.staff.map(s => '<td><input data-c="' + d + '|' + s.id + '" value="' + (c[s.id] || '') + '" placeholder="off" onchange="markCell(this)"></td>').join('') + '</tr>';
+        });
+        $('schTable').innerHTML = h;
+      }).catch(e => amsg('schMsg', 'Connection error: ' + e.message, false));
+    }
+    function markCell(el) { const v = normShift(el.value); if (v === null) el.classList.add('bad'); else { el.classList.remove('bad'); el.value = v; } }
+    function readPatterns() {
+      const out = {}; let bad = null;
+      document.querySelectorAll('#patTable input').forEach(el => { const [id, d] = el.dataset.p.split('|'); const v = normShift(el.value); if (v === null) bad = bad || el; (out[id] = out[id] || {})[d] = v || ''; });
+      return bad ? null : out;
+    }
+    function savePatternsUI() {
+      const p = readPatterns(); if (!p) return amsg('schMsg', 'Fix the red pattern cells first (e.g. 10-8 or 10:00-20:00).', false);
+      amsg('schMsg', 'Saving pattern…', true);
+      adminCall('savePatterns', { patterns: p }).then(r => amsg('schMsg', r.message, r.ok)).catch(e => amsg('schMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function fillFromPattern() {
+      const p = readPatterns(); if (!p) return amsg('schMsg', 'Fix the red pattern cells first.', false);
+      if (!confirm('Fill every day of this cutoff from the weekly pattern? (Replaces what is in the grid now; nothing is saved until you tap Save schedule.)')) return;
+      document.querySelectorAll('#schTable input').forEach(el => { const [d, id] = el.dataset.c.split('|'); el.value = (p[id] || {})[PD[(dowOf(d) + 6) % 7]] || ''; el.classList.remove('bad'); });
+      amsg('schMsg', 'Grid filled from pattern. Adjust any day, then tap Save schedule.', true);
+    }
+    function saveAdminSched() {
+      const cells = {}; let bad = false, n = 0;
+      document.querySelectorAll('#schTable input').forEach(el => { const [d, id] = el.dataset.c.split('|'); const v = normShift(el.value); if (v === null) { bad = true; el.classList.add('bad'); } else if (v) { (cells[d] = cells[d] || {})[id] = v; n++; } });
+      if (bad) return amsg('schMsg', 'Fix the red cells first (e.g. 10-8, 10:00-20:00, 12pm-8pm).', false);
+      if (!confirm('Save ' + n + ' shifts for ' + schGrid.start + ' to ' + schGrid.end + '? Staff not scheduled on a day will NOT be able to time in that day.')) return;
+      amsg('schMsg', 'Saving schedule…', true);
+      adminCall('saveSchedule', { month: $('schMonth').value, half: $('schHalf').value, cells: cells }).then(r => {
+        amsg('schMsg', r.message, r.ok); if (r.ok) loadAdminSched();
+      }).catch(e => amsg('schMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
   </script>
 </body>
