@@ -3,13 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="theme-color" content="#1a73e8">
+  <meta name="theme-color" content="#f51f6f">
   <title>Staff Timeclock</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Timeclock">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
     body { background: #f0f4f8; min-height: 100vh; display: flex; justify-content: center; }
     .app { width: 100%; max-width: 420px; padding: 20px 16px 40px; }
     h1 { font-size: 22px; color: #1a2a3a; text-align: center; margin: 8px 0 2px; }
+    .logo-clock { position: relative; width: 84px; height: 84px; margin: 4px auto 0; border-radius: 20px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+    .logo-clock img, .logo-clock svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .install { display: none; margin: 8px auto 0; padding: 10px 16px; font-size: 14px; background: #f51f6f; border-radius: 12px; flex: none; width: 100%; }
+    .ioshint { display: none; font-size: 12px; color: #667; text-align: center; margin-top: 6px; }
     .clock { text-align: center; font-size: 34px; font-weight: 700; color: #1a73e8; letter-spacing: 1px; }
     .date { text-align: center; color: #667; font-size: 14px; margin-bottom: 16px; }
     label { display: block; font-size: 13px; font-weight: 600; color: #445; margin: 14px 0 6px; }
@@ -91,7 +102,18 @@
 </head>
 <body>
   <div class="app">
-    <h1>⏱ Staff Timeclock</h1>
+    <div class="logo-clock" aria-label="clock">
+      <img src="clock-face.png" alt="">
+      <svg viewBox="0 0 100 100">
+        <g id="hHour"><line x1="50" y1="50" x2="50" y2="28" stroke="#111" stroke-width="5.5" stroke-linecap="round"/></g>
+        <g id="hMin"><line x1="50" y1="50" x2="50" y2="16" stroke="#111" stroke-width="4.2" stroke-linecap="round"/></g>
+        <g id="hSec"><line x1="50" y1="59" x2="50" y2="13" stroke="#ffd600" stroke-width="1.4" stroke-linecap="round"/></g>
+        <circle cx="50" cy="50" r="3.2" fill="#ffd600"/><circle cx="50" cy="50" r="1.2" fill="#111"/>
+      </svg>
+    </div>
+    <h1>Staff Timeclock</h1>
+    <button class="install" id="btnInstall" onclick="installApp()">📲 Install the Timeclock app</button>
+    <div class="ioshint" id="iosHint">📲 To install on iPhone: tap the Share button <b>⬆︎</b> then <b>Add to Home Screen</b>.</div>
     <div class="clock" id="clock">--:--:--</div>
     <div class="date" id="date"></div>
     <div class="topnav"><button id="navStaff" class="on" onclick="showView('staff')">👤 Staff</button><button id="navAdmin" onclick="showView('admin')">🔐 Admin</button></div>
@@ -239,6 +261,10 @@
     // ---- clock ----
     function tick() {
       const n = new Date();
+      const hs = n.getHours() % 12, ms = n.getMinutes(), ss = n.getSeconds();
+      $('hHour').setAttribute('transform', 'rotate(' + (hs * 30 + ms * 0.5) + ' 50 50)');
+      $('hMin').setAttribute('transform', 'rotate(' + (ms * 6 + ss * 0.1) + ' 50 50)');
+      $('hSec').setAttribute('transform', 'rotate(' + (ss * 6) + ' 50 50)');
       $('clock').textContent = n.toLocaleTimeString();
       $('date').textContent = n.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
@@ -821,6 +847,14 @@
         amsg('schMsg', r.message, r.ok); if (r.ok) loadAdminSched();
       }).catch(e => amsg('schMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
+    // ===================== INSTALLABLE APP =====================
+    let installEvt = null;
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!standalone) $('btnInstall').style.display = 'block'; });
+    window.addEventListener('appinstalled', () => { $('btnInstall').style.display = 'none'; installEvt = null; });
+    function installApp() { if (!installEvt) return; installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; $('btnInstall').style.display = 'none'; }); }
+    if (!standalone && /iphone|ipad|ipod/i.test(navigator.userAgent)) $('iosHint').style.display = 'block';
   </script>
 </body>
 </html>
