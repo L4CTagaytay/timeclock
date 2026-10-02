@@ -626,10 +626,12 @@
         return;
       }
       if (p.staffOnly) {
-        let r2 = '';
+        let r2 = '', onShift = 0;
+        const nd = new Date(), todayStr = nd.getFullYear() + '-' + ('0' + (nd.getMonth() + 1)).slice(-2) + '-' + ('0' + nd.getDate()).slice(-2);
         p.days.forEach(d => {
+          if (d.note && d.date === todayStr && d.in && d.in !== '—' && (!d.out || d.out === '—')) { d.note = ''; d.onShift = true; onShift++; }
           r2 += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td><td>' + esc(d.in) + '</td><td>' + esc(d.out) + '</td>' +
-            '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : (d.hours || 0).toFixed(2)) + '</td></tr>';
+            '<td class="r">' + (d.onShift ? '<span style="color:#1a73e8">on shift</span>' : d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : (d.hours || 0).toFixed(2)) + '</td></tr>';
         });
         el.innerHTML = '<h3>' + esc(p.name) + '</h3>' +
           '<div class="sub">Cutoff: ' + esc(p.cutoff) + '</div>' +
@@ -639,7 +641,7 @@
           (p.otHours ? '<div><span>Overtime hours</span><span>' + p.otHours.toFixed(2) + '</span></div>' : '') +
           '<div class="gross"><span>TOTAL HOURS WORKED</span><span>' + (p.totalHours || 0).toFixed(2) + '</span></div></div>' +
           '<div style="font-size:11px;color:#667;margin-top:6px">Hours counted for pay: after late rounding, store/shift closing time and the unpaid break.</div>' +
-          (p.incomplete ? '<div class="warn">' + p.incomplete + ' day(s) missing IN or OUT. Please tell the admin.</div>' : '');
+          (p.incomplete - onShift > 0 ? '<div class="warn">' + (p.incomplete - onShift) + ' day(s) missing IN or OUT. Please tell the admin.</div>' : '');
         $('pin').value = '';
         return;
       }
