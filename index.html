@@ -241,7 +241,7 @@
     const $ = id => document.getElementById(id);
 
     // POST to the spreadsheet API with a timeout; the answer comes back as JSON
-    function api(action, data, timeoutMs) {
+    function apiOnce(action, data, timeoutMs) {
       const ctrl = window.AbortController ? new AbortController() : null;
       const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs || 25000) : null;
       return fetch(API, {
@@ -256,6 +256,27 @@
         if (timer) clearTimeout(timer);
         throw new Error(e.name === 'AbortError' ? 'Server took too long to answer' : e.message);
       });
+    }
+
+    // Google sometimes drops a reply ("Failed to fetch" / temporary page). Read-only requests are retried
+    // automatically; punches and phone registration are never sent twice.
+    function api(action, data, timeoutMs) {
+      const noRetry = action === 'punch' || action === 'register';
+      let tries = 0;
+      const attempt = () => apiOnce(action, data, timeoutMs).catch(e => {
+        tries++;
+        if (noRetry || tries >= 3 || !/Failed to fetch|Unexpected reply|NetworkError|Load failed|too long/i.test(e.message)) throw e;
+        return new Promise(r => setTimeout(r, 1200 * tries)).then(attempt);
+      });
+      return attempt();
+    }
+
+    // If a punch reply is lost, ask the server whether it was actually saved
+    function confirmPunch(staffId, type) {
+      return api('punchstatus', { staffId: staffId }, 30000).then(st => {
+        if (st && st.ok && st.type === type && st.ts && Math.abs((st.now || Date.now()) - st.ts) < 4 * 60 * 1000) return st;
+        return null;
+      }).catch(() => null);
     }
 
     // ---- clock ----
@@ -524,7 +545,14 @@
             if (res.ok) $('pin').value = '';
             prefetchChallenge();
           })
-          .catch(e => { punching = false; setBusy(false); punchResult(false, /Unexpected reply/.test(e.message) ? 'The server did not confirm your punch. Check My Time Record first — if your time is not there, try again.' : ('No connection to the server (' + e.message + '). Check your internet.')); prefetchChallenge(); });
+          .catch(e => {
+            $('spin').textContent = 'Checking if your punch was saved…';
+            confirmPunch(s.id, p.type).then(st => {
+              punching = false; setBusy(false); prefetchChallenge();
+              if (st) { punchResult(true, s.name + ' clocked ' + p.type + ' at ' + st.time + '.'); $('pin').value = ''; }
+              else punchResult(false, /Failed to fetch|Unexpected reply|too long/i.test(e.message) ? 'The server did not answer. Please check your internet and try again.' : ('Error: ' + e.message));
+            });
+          });
       });
       // the unlock screen can stop the camera on some phones: restart it for next time
       if (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended')) startCam();
