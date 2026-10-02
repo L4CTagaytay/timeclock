@@ -60,7 +60,7 @@
     <div class="fpstatus" id="fpstatus"></div>
 
     <label for="pin">Access code (PIN)</label>
-    <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="For payslip &amp; first-time setup">
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="For time record &amp; first-time setup">
     <button class="reg" id="btnReg" onclick="registerFingerprint()">🔓 Register this phone (fingerprint / face / phone PIN)</button>
 
     <div class="cam-box">
@@ -79,7 +79,7 @@
     <div class="spin" id="spin">Working…</div>
     <div class="msg" id="msg"></div>
 
-    <label>My Payslip</label>
+    <label>My Time Record</label>
     <div class="slip-btns">
       <button id="btnCur" onclick="viewSlip('current')" disabled>This Cutoff</button>
       <button id="btnPrev" onclick="viewSlip('previous')" disabled>Last Cutoff</button>
@@ -416,8 +416,8 @@
       const pin = $('pin').value.trim();
       const el = $('slip');
       el.style.display = 'block';
-      if (!pin) { el.innerHTML = '<div style="color:#b00020">Please enter your access code to view your payslip.</div>'; return; }
-      el.innerHTML = '<div style="text-align:center;color:#1a73e8;font-weight:600">Loading payslip…</div>';
+      if (!pin) { el.innerHTML = '<div style="color:#b00020">Please enter your access code to view your time record.</div>'; return; }
+      el.innerHTML = '<div style="text-align:center;color:#1a73e8;font-weight:600">Loading…</div>';
       api('payslip', { staffId: s.id, which: which, pin: pin })
         .then(renderSlip)
         .catch(e => { el.innerHTML = '<div style="color:#b00020">Error: ' + esc(e.message) + '</div>'; });
@@ -430,6 +430,20 @@
       if (!p.ok) { el.innerHTML = '<div style="color:#b00020">' + esc(p.message || 'Could not load payslip.') + '</div>'; return; }
       if (!p.days.length) {
         el.innerHTML = '<h3>' + esc(p.name) + '</h3><div class="sub">' + esc(p.cutoff) + '</div><div>No punches recorded in this cutoff yet.</div>';
+        return;
+      }
+      if (p.staffOnly) {
+        let r2 = '';
+        p.days.forEach(d => {
+          r2 += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td><td>' + esc(d.in) + '</td><td>' + esc(d.out) + '</td>' +
+            '<td>' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : '') + '</td></tr>';
+        });
+        el.innerHTML = '<h3>' + esc(p.name) + '</h3>' +
+          '<div class="sub">Cutoff: ' + esc(p.cutoff) + '</div>' +
+          '<table><tr><th>Date</th><th>Time In</th><th>Time Out</th><th></th></tr>' + r2 + '</table>' +
+          '<div class="totals"><div><span>Days worked</span><span>' + p.daysWorked + '</span></div></div>' +
+          (p.incomplete ? '<div class="warn">' + p.incomplete + ' day(s) missing IN or OUT. Please tell the admin.</div>' : '');
+        $('pin').value = '';
         return;
       }
       let rows = '';
