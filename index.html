@@ -192,12 +192,11 @@
 
     <div class="wsched">
       <b>📝 Requests<span id="bdgReq"></span></b>
-      <div style="font-size:12px;color:#667;margin-top:4px">Leave and Change of schedule must be filed at least 3 days before the date, otherwise they are automatically denied (only the admin can override). Sick leave and absences can be filed anytime.</div>
+      <div style="font-size:12px;color:#667;margin-top:4px">Leave and Change of schedule must be filed at least 3 days before the date, otherwise they are automatically denied (only the admin can override). Sick leave can be filed anytime.</div>
       <select id="rqType" onchange="$('rqShiftRow').style.display = this.value === 'CHANGE' ? 'block' : 'none'">
         <option value="">— Type of request —</option>
         <option value="LEAVE">Leave</option>
         <option value="SICK">Sick leave</option>
-        <option value="ABSENCE">Absence</option>
         <option value="CHANGE">Change of schedule</option>
       </select>
       <div style="display:flex;gap:8px"><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">From</div><input type="date" id="rqFrom"></div><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">To</div><input type="date" id="rqTo"></div></div>
