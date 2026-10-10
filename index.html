@@ -192,7 +192,7 @@
 
     <div class="wsched">
       <b>📝 Requests<span id="bdgReq"></span></b>
-      <div style="font-size:12px;color:#667;margin-top:4px">Leave and Change of schedule must be filed at least 3 days before the date, otherwise they are automatically denied (only the admin can override). Sick leave can be filed anytime.</div>
+      <div style="font-size:12px;color:#667;margin-top:4px">Leave and Change of schedule must be filed at least 3 days before the date, otherwise they are automatically denied (only the admin can override). Sick leave can be filed anytime. If a request is denied for short notice, you can ask once for reconsideration.</div>
       <select id="rqType" onchange="$('rqShiftRow').style.display = this.value === 'CHANGE' ? 'block' : 'none'">
         <option value="">— Type of request —</option>
         <option value="LEAVE">Leave</option>
@@ -201,7 +201,18 @@
       </select>
       <div style="display:flex;gap:8px"><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">From</div><input type="date" id="rqFrom"></div><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">To</div><input type="date" id="rqTo"></div></div>
       <div id="rqShiftRow" style="display:none"><input type="text" id="rqShift" placeholder="New shift you want, e.g. 12-8 or 12:00-20:00 (or OFF)"></div>
-      <textarea id="rqReason" rows="2" maxlength="300" placeholder="Reason"></textarea>
+      <select id="rqCat">
+        <option value="">— Reason for request —</option>
+        <option>Family matter</option>
+        <option>Medical / check-up</option>
+        <option>Illness</option>
+        <option>Personal errand</option>
+        <option>Emergency</option>
+        <option>Travel</option>
+        <option>School / exam</option>
+        <option>Others</option>
+      </select>
+      <textarea id="rqReason" rows="2" maxlength="250" placeholder="Details (e.g. what, where, why)"></textarea>
       <button class="sbtn green" onclick="submitReqUI()">Send request</button>
       <button class="sbtn gray" onclick="loadMyRequests()">My requests</button>
       <div id="reqOut"></div>
@@ -1017,6 +1028,23 @@
     }
 
     // ===================== STAFF REQUESTS =====================
+    // reason text "[Category] details || RECONSIDERATION: why" -> html
+    function reasonHtml(txt) {
+      const parts = String(txt || '').split(' || RECONSIDERATION: ');
+      const m = parts[0].match(/^\[([^\]]+)\]\s*(.*)$/);
+      let h = m ? '<b>' + esc(m[1]) + '</b> – ' + esc(m[2]) : esc(parts[0]);
+      if (parts[1]) h += '<div style="margin-top:3px;color:#1e40af"><b>Reconsideration:</b> ' + esc(parts[1]) + '</div>';
+      return h;
+    }
+    function canReconsider(x) { return x.status === 'DENIED' && /^Automatically denied/.test(x.note) && !/RECONSIDERATION:/.test(x.reason); }
+    function reconsiderUI(id) {
+      const a = needPin('reqOut'); if (!a) return;
+      const why = ($('rc_' + id) || {}).value || '';
+      if (!why.trim()) return alert('Please explain why you could not file at least 3 days ahead.');
+      api('reconsider', { staffId: a.s.id, pin: a.pin, id: id, reason: why.trim() }, 40000).then(r => {
+        alert((r.ok ? '✅ ' : '❌ ') + (r.message || '')); if (r.ok) { loadMyRequests(); refreshNotices(); }
+      }).catch(e => alert('Connection error — NOT sent. Please try again. (' + e.message + ')'));
+    }
     function chipFor(st) { return st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
     function submitReqUI() {
       const a = needPin('reqOut'); if (!a) return;
@@ -1024,7 +1052,9 @@
       if (!type) return alert('Pick the type of request.');
       if (!from) return alert('Pick the date.');
       if (to < from) return alert('"To" date must be on or after the "From" date.');
-      if (!reason) return alert('Please write a short reason.');
+      const cat = $('rqCat').value;
+      if (!cat) return alert('Pick the reason for your request.');
+      if (!reason) return alert('Please write a few details about your reason.');
       let newShift = '';
       if (type === 'CHANGE') {
         const raw = $('rqShift').value.trim();
@@ -1032,10 +1062,10 @@
         if (!newShift) return alert('Enter the new shift you want, e.g. 12-8 or 12:00-20:00 (or OFF).');
       }
       $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
-      api('request', { staffId: a.s.id, pin: a.pin, type: type, from: from, to: to, newShift: newShift, reason: reason }, 40000).then(r => {
+      api('request', { staffId: a.s.id, pin: a.pin, type: type, from: from, to: to, newShift: newShift, reason: '[' + cat + '] ' + reason }, 40000).then(r => {
         if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         alert(r.status === 'DENIED' ? '❌ ' + r.message : '✅ ' + r.message);
-        $('rqType').value = ''; $('rqFrom').value = ''; $('rqTo').value = ''; $('rqShift').value = ''; $('rqReason').value = ''; $('rqShiftRow').style.display = 'none';
+        $('rqType').value = ''; $('rqCat').value = ''; $('rqFrom').value = ''; $('rqTo').value = ''; $('rqShift').value = ''; $('rqReason').value = ''; $('rqShiftRow').style.display = 'none';
         loadMyRequests(); refreshNotices();
       }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error — request NOT sent. Please try again. (' + esc(e.message) + ')</div>'; });
     }
@@ -1047,7 +1077,8 @@
         if (!r.requests.length) { $('reqOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No requests yet.</div>'; return; }
         $('reqOut').innerHTML = r.requests.map(x => '<div class="pcard"><b>' + esc(x.typeLabel) + '</b> ' + chipFor(x.status) +
           '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
-          '<div style="font-size:12px;color:#667">' + esc(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;margin-top:4px"><b>Admin:</b> ' + esc(x.note) + '</div>' : '') +
+          '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;margin-top:4px"><b>Admin:</b> ' + esc(x.note) + '</div>' : '') +
+          (canReconsider(x) ? '<textarea id="rc_' + x.id + '" rows="2" maxlength="300" placeholder="Why could you not file at least 3 days ahead?"></textarea><button class="sbtn" onclick="reconsiderUI(\'' + x.id + '\')">🙏 Ask for reconsideration</button>' : '') +
           '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Filed ' + esc(x.filedAt) + '</div></div>').join('');
         refreshNotices();
       }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
@@ -1066,7 +1097,8 @@
             (x.status === 'PENDING' ? '<button class="btn red" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', false)">Deny</button>' : '') + '</div>' : '';
           return '<div class="pcard"><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
             '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
-            '<div style="font-size:12px;color:#334">' + esc(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '') +
+            (/RECONSIDERATION:/.test(x.reason) && x.status === 'PENDING' ? ' <span class="chip p">Reconsideration – late request</span>' : '') +
+            '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '') +
             '<div style="font-size:11px;color:#94a3b8">Filed ' + esc(x.filedAt) + (x.decidedAt ? ' • decided ' + esc(x.decidedAt) : '') + '</div>' + act + '</div>';
         }).join('');
       }).catch(e => { $('aReqOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
