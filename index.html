@@ -75,7 +75,23 @@
     .adm .row .lbl { flex: 0 0 52px; font-weight: 700; }
     .adm .btn { padding: 12px 0; font-size: 15px; background: #1a73e8; border-radius: 10px; width: 100%; margin-top: 10px; }
     .adm .btn.gray { background: #64748b; } .adm .btn.red { background: #dc2626; } .adm .btn.green { background: #16a34a; }
-    .adm .subnav { display: flex; gap: 6px; margin-top: 10px; }
+    .adm .subnav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .adm .subnav button { flex: 1 1 30%; }
+    .badge { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 9px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; line-height: 16px; text-align: center; }
+    .snotice { margin-top: 12px; padding: 12px; border-radius: 12px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-size: 14px; font-weight: 600; }
+    .wsched input, .wsched select, .wsched textarea { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; margin-top: 6px; font-family: inherit; }
+    .sbtn { width: 100%; padding: 12px 0; font-size: 14px; background: #1a73e8; border-radius: 10px; margin-top: 8px; }
+    .sbtn.green { background: #16a34a; } .sbtn.gray { background: #64748b; }
+    .pcard { border: 1px solid #dde3ec; border-radius: 12px; padding: 10px; margin-top: 10px; background: #fff; }
+    .pcard table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 6px; }
+    .pcard th, .pcard td { border: 1px solid #dde3ec; padding: 4px 6px; text-align: left; }
+    .pcard th { background: #eef3fd; } .pcard td.r, .pcard th.r { text-align: right; }
+    .pcard .tl div { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; }
+    .pcard .gr { font-weight: 800; color: #16a34a; font-size: 15px; border-top: 2px solid #dde3ec; margin-top: 4px; padding-top: 6px !important; }
+    .chip { display: inline-block; padding: 2px 8px; border-radius: 9px; font-size: 11px; font-weight: 700; }
+    .chip.p { background: #fef3c7; color: #92400e; } .chip.a { background: #dcfce7; color: #166534; } .chip.d { background: #fee2e2; color: #991b1b; }
+    .rem { font-size: 9px; color: #b45309; white-space: normal; font-weight: 600; line-height: 1.2; margin-top: 2px; }
+    td.rq { background: #fffbeb !important; }
     .adm .subnav button { padding: 10px 0; font-size: 13px; background: #e2e8f0; color: #1e293b; border-radius: 10px; }
     .adm .subnav button.on { background: #0f766e; color: #fff; }
     .adm table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 8px; }
@@ -116,7 +132,7 @@
     <div class="ioshint" id="iosHint">📲 To install on iPhone: tap the Share button <b>⬆︎</b> then <b>Add to Home Screen</b>.</div>
     <div class="clock" id="clock">--:--:--</div>
     <div class="date" id="date"></div>
-    <div class="topnav"><button id="navStaff" class="on" onclick="showView('staff')">👤 Staff</button><button id="navAdmin" onclick="showView('admin')">🔐 Admin</button></div>
+    <div class="topnav"><button id="navStaff" class="on" onclick="showView('staff')">👤 Staff</button><button id="navAdmin" onclick="showView('admin')">🔐 Admin<span id="bdgAdmin"></span></button></div>
     <div id="staffView">
     <div id="locstatus" style="font-size:13px;text-align:center;margin:-8px 0 8px;color:#667">📍 Checking location…</div>
 
@@ -158,12 +174,39 @@
       <div id="wsOut" class="note" style="font-size:12px;color:#667;margin-top:8px">🔒 Enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.</div>
     </div>
 
+    <div class="snotice" id="staffNotice" style="display:none"></div>
+
     <label>My Time Record</label>
     <div class="slip-btns">
       <button id="btnCur" onclick="viewSlip('current')" disabled>This Cutoff</button>
       <button id="btnPrev" onclick="viewSlip('previous')" disabled>Last Cutoff</button>
     </div>
     <div class="slip" id="slip"></div>
+
+    <div class="wsched">
+      <b>💵 My Payslips<span id="bdgPay"></span></b>
+      <div style="font-size:12px;color:#667;margin-top:4px">Released every 16th (for the 1st–15th) and every 1st (for the 16th–end) at 12:00 noon. Check it and tap <b>Accept</b> so your salary can be processed.</div>
+      <button class="sbtn" onclick="loadMyPayslips()">View my payslips</button>
+      <div id="payslipsOut"></div>
+    </div>
+
+    <div class="wsched">
+      <b>📝 Requests<span id="bdgReq"></span></b>
+      <div style="font-size:12px;color:#667;margin-top:4px">Leave and Change of schedule must be filed at least 3 days before the date, otherwise they are automatically denied (only the admin can override). Sick leave and absences can be filed anytime.</div>
+      <select id="rqType" onchange="$('rqShiftRow').style.display = this.value === 'CHANGE' ? 'block' : 'none'">
+        <option value="">— Type of request —</option>
+        <option value="LEAVE">Leave</option>
+        <option value="SICK">Sick leave</option>
+        <option value="ABSENCE">Absence</option>
+        <option value="CHANGE">Change of schedule</option>
+      </select>
+      <div style="display:flex;gap:8px"><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">From</div><input type="date" id="rqFrom"></div><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">To</div><input type="date" id="rqTo"></div></div>
+      <div id="rqShiftRow" style="display:none"><input type="text" id="rqShift" placeholder="New shift you want, e.g. 12-8 or 12:00-20:00 (or OFF)"></div>
+      <textarea id="rqReason" rows="2" maxlength="300" placeholder="Reason"></textarea>
+      <button class="sbtn green" onclick="submitReqUI()">Send request</button>
+      <button class="sbtn gray" onclick="loadMyRequests()">My requests</button>
+      <div id="reqOut"></div>
+    </div>
     </div>
 
     <div id="adminView" class="adm" style="display:none">
@@ -180,6 +223,8 @@
           <button id="subSched" onclick="adminTab('sched')">🗓 Schedule</button>
           <button id="subHours" onclick="adminTab('hours')">🕙 Hours</button>
           <button id="subHol" onclick="adminTab('hol')">📅 Holidays</button>
+          <button id="subReq" onclick="adminTab('req')">📝 Requests<span id="bdgAReq"></span></button>
+          <button id="subPsl" onclick="adminTab('psl')">✅ Payslips<span id="bdgAPsl"></span></button>
         </div>
 
         <div class="card" id="tabPay">
@@ -202,6 +247,22 @@
             <button class="btn green" onclick="saveAdminSched()">Save schedule</button>
           </div>
           <div class="amsg" id="schMsg"></div>
+        </div>
+
+        <div class="card" id="tabReq" style="display:none">
+          <b>Staff requests</b>
+          <div class="row"><select id="reqFilter" onchange="loadAdminRequests()"><option value="recent">Pending + last 14 days</option><option value="all">All</option></select></div>
+          <div id="aReqOut" class="note">Loading…</div>
+          <div class="amsg" id="aReqMsg"></div>
+        </div>
+
+        <div class="card" id="tabPsl" style="display:none">
+          <b>Released payslips &amp; acceptance</b>
+          <div id="aPslOut" class="note">Loading…</div>
+          <h4>Release now / re-release</h4>
+          <div class="note">Payslips release automatically on the 16th and the 1st at 12:00 noon. Use this only to release early or to re-release after fixing the TimeLog (staff must accept again).</div>
+          <div class="row"><select id="relCut"></select><button class="btn" style="margin-top:0" onclick="releaseNowUI()">Release</button></div>
+          <div class="amsg" id="aPslMsg"></div>
         </div>
 
         <div class="card" id="tabHours" style="display:none">
@@ -710,12 +771,14 @@
       $('payOut').innerHTML = 'Pick a month and tap Show.';
     }
     function adminTab(t) {
-      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol']].forEach(x => {
+      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl']].forEach(x => {
         $(x[1]).style.display = x[0] === t ? 'block' : 'none';
         $(x[2]).className = x[0] === t ? 'on' : '';
       });
       if (t === 'hours') loadHours();
       if (t === 'hol') loadHolidays();
+      if (t === 'req') loadAdminRequests();
+      if (t === 'psl') loadAdminPayslips();
       if (t === 'sched' && !$('schMonth').value) { const n = new Date(); $('schMonth').value = n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2); $('schHalf').value = n.getDate() <= 15 ? '1' : '2'; loadAdminSched(); }
     }
     function loadSummary() {
@@ -813,7 +876,8 @@
         g.dates.forEach(d => {
           const c = g.cells[d] || {};
           h += '<tr class="' + (d === g.today ? 'today' : '') + '"><td class="dl">' + WD[dowOf(d)] + ' ' + d.slice(5).replace('-', '/') + '</td>' +
-            g.staff.map(s => c[s.id] ? '<td class="on">' + shortShift(c[s.id]) + '</td>' : '<td class="off">off</td>').join('') + '</tr>';
+            g.staff.map(s => { const rm = ((g.remarks || {})[d] || {})[s.id]; const rh = rm ? '<div class="rem">' + esc(rm) + '</div>' : '';
+              return c[s.id] ? '<td class="on' + (rm ? ' rq' : '') + '">' + shortShift(c[s.id]) + rh + '</td>' : '<td class="off' + (rm ? ' rq' : '') + '">off' + rh + '</td>'; }).join('') + '</tr>';
         });
         $('wsOut').innerHTML = h + '</table></div>';
       }).catch(e => { $('wsOut').innerHTML = 'Could not load schedule (' + esc(e.message) + ').'; });
@@ -850,7 +914,7 @@
         let h = '<tr><th>Date</th>' + g.staff.map(s => '<th>' + esc(firstName(s.name)) + '</th>').join('') + '</tr>';
         g.dates.forEach(d => {
           const c = g.cells[d] || {};
-          h += '<tr><td class="dl">' + WD[dowOf(d)] + ' ' + d.slice(5).replace('-', '/') + '</td>' + g.staff.map(s => '<td><input data-c="' + d + '|' + s.id + '" value="' + (c[s.id] || '') + '" placeholder="off" onchange="markCell(this)"></td>').join('') + '</tr>';
+          h += '<tr><td class="dl">' + WD[dowOf(d)] + ' ' + d.slice(5).replace('-', '/') + '</td>' + g.staff.map(s => { const rm = ((g.remarks || {})[d] || {})[s.id]; return '<td' + (rm ? ' class="rq"' : '') + '><input data-c="' + d + '|' + s.id + '" value="' + (c[s.id] || '') + '" placeholder="off" onchange="markCell(this)">' + (rm ? '<div class="rem">' + esc(rm) + '</div>' : '') + '</td>'; }).join('') + '</tr>';
         });
         $('schTable').innerHTML = h;
       }).catch(e => amsg('schMsg', 'Connection error: ' + e.message, false));
@@ -893,6 +957,154 @@
     window.addEventListener('appinstalled', () => { $('btnInstall').style.display = 'none'; installEvt = null; });
     function installApp() { if (!installEvt) return; installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; $('btnInstall').style.display = 'none'; }); }
     if (!standalone && /iphone|ipad|ipod/i.test(navigator.userAgent)) $('iosHint').style.display = 'block';
+    // ===================== NOTICES (badges) =====================
+    function badge(id, n) { const el = $(id); if (el) el.innerHTML = n > 0 ? '<span class="badge">' + n + '</span>' : ''; }
+    function refreshNotices() {
+      const s = currentStaff();
+      api('notices', { staffId: s ? s.id : '' }, 30000).then(n => {
+        if (!n || !n.ok) return;
+        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0));
+        badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', n.adminAccepted || 0);
+        if (!s) { $('staffNotice').style.display = 'none'; badge('bdgPay', 0); badge('bdgReq', 0); return; }
+        badge('bdgPay', n.newPayslips || 0); badge('bdgReq', n.requestUpdates || 0);
+        const msgs = [];
+        if (n.newPayslips) msgs.push('🔔 Your payslip is ready. Please check and accept it under <b>My Payslips</b>.');
+        if (n.requestUpdates) msgs.push('🔔 The admin answered your request. Tap <b>My requests</b> to see it.');
+        $('staffNotice').innerHTML = msgs.join('<br>');
+        $('staffNotice').style.display = msgs.length ? 'block' : 'none';
+      }).catch(() => {});
+    }
+    $('staff').addEventListener('change', () => { $('payslipsOut').innerHTML = ''; $('reqOut').innerHTML = ''; refreshNotices(); });
+    setTimeout(refreshNotices, 2500);
+    setInterval(refreshNotices, 180000);
+
+    function needPin(outId) {
+      const s = currentStaff(), pin = $('pin').value.trim();
+      if (!s || !pin) { $(outId).innerHTML = '<div style="color:#b00020;font-size:13px;margin-top:8px">Pick your name and enter your access code (PIN) above first.</div>'; return null; }
+      return { s: s, pin: pin };
+    }
+
+    // ===================== STAFF PAYSLIPS =====================
+    function staffSlipHtml(p) {
+      let rows = '';
+      p.days.forEach(d => { rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td><td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>'; });
+      let t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+        '<div><span>Regular: ' + p.regHours.toFixed(2) + ' h × ' + peso(p.rate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
+        '<div><span>OT: ' + p.otHours.toFixed(2) + ' h × ' + peso(p.rate) + ' × ' + p.otMult + '</span><span>' + peso(p.otPay) + '</span></div>';
+      if (p.rhHours > 0) t += '<div><span>Reg. holiday: ' + p.rhHours.toFixed(2) + ' h × ' + (p.rhMult * 100) + '%</span><span>' + peso(p.rhPay) + '</span></div>';
+      if (p.shHours > 0) t += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%</span><span>' + peso(p.shPay) + '</span></div>';
+      if (p.unworkedRH > 0) t += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>' + peso(p.unworkedRHPay) + '</span></div>';
+      t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div><div class="gr"><span>GROSS PAY</span><span>' + peso(p.grossPay) + '</span></div>';
+      return '<table><tr><th>Date</th><th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table><div class="tl" style="margin-top:6px">' + t + '</div>';
+    }
+    function loadMyPayslips() {
+      const a = needPin('payslipsOut'); if (!a) return;
+      $('payslipsOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
+      api('mypayslips', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (!r.ok) { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        if (!r.payslips.length) { $('payslipsOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No payslip released yet. The next one is released on the 16th or the 1st at 12:00 noon.</div>'; return; }
+        $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + esc(x.start) + ' to ' + esc(x.end) + '</b> ' +
+          (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip p">Waiting for your acceptance</span>') +
+          (x.slip ? staffSlipHtml(x.slip) : '') +
+          (x.status !== 'ACCEPTED' ? '<button class="sbtn green" onclick="acceptSlipUI(\'' + x.start + '\')">✅ I checked it — Accept payslip</button>' : '') + '</div>').join('');
+      }).catch(e => { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function acceptSlipUI(start) {
+      const a = needPin('payslipsOut'); if (!a) return;
+      if (!confirm('Accept your payslip for the cutoff starting ' + start + '? Your salary will then be processed.')) return;
+      api('acceptpayslip', { staffId: a.s.id, pin: a.pin, start: start }, 40000).then(r => {
+        alert(r.message || (r.ok ? 'Accepted.' : 'Not accepted.')); if (r.ok) { loadMyPayslips(); refreshNotices(); }
+      }).catch(e => alert('Connection error — NOT accepted yet. Please try again. (' + e.message + ')'));
+    }
+
+    // ===================== STAFF REQUESTS =====================
+    function chipFor(st) { return st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
+    function submitReqUI() {
+      const a = needPin('reqOut'); if (!a) return;
+      const type = $('rqType').value, from = $('rqFrom').value, to = $('rqTo').value || $('rqFrom').value, reason = $('rqReason').value.trim();
+      if (!type) return alert('Pick the type of request.');
+      if (!from) return alert('Pick the date.');
+      if (to < from) return alert('"To" date must be on or after the "From" date.');
+      if (!reason) return alert('Please write a short reason.');
+      let newShift = '';
+      if (type === 'CHANGE') {
+        const raw = $('rqShift').value.trim();
+        newShift = /^off$/i.test(raw) ? 'OFF' : normShift(raw);
+        if (!newShift) return alert('Enter the new shift you want, e.g. 12-8 or 12:00-20:00 (or OFF).');
+      }
+      $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
+      api('request', { staffId: a.s.id, pin: a.pin, type: type, from: from, to: to, newShift: newShift, reason: reason }, 40000).then(r => {
+        if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        alert(r.status === 'DENIED' ? '❌ ' + r.message : '✅ ' + r.message);
+        $('rqType').value = ''; $('rqFrom').value = ''; $('rqTo').value = ''; $('rqShift').value = ''; $('rqReason').value = ''; $('rqShiftRow').style.display = 'none';
+        loadMyRequests(); refreshNotices();
+      }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error — request NOT sent. Please try again. (' + esc(e.message) + ')</div>'; });
+    }
+    function loadMyRequests() {
+      const a = needPin('reqOut'); if (!a) return;
+      $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
+      api('myrequests', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        if (!r.requests.length) { $('reqOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No requests yet.</div>'; return; }
+        $('reqOut').innerHTML = r.requests.map(x => '<div class="pcard"><b>' + esc(x.typeLabel) + '</b> ' + chipFor(x.status) +
+          '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
+          '<div style="font-size:12px;color:#667">' + esc(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;margin-top:4px"><b>Admin:</b> ' + esc(x.note) + '</div>' : '') +
+          '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Filed ' + esc(x.filedAt) + '</div></div>').join('');
+        refreshNotices();
+      }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+
+    // ===================== ADMIN: REQUESTS & PAYSLIPS =====================
+    function loadAdminRequests() {
+      $('aReqOut').innerHTML = 'Loading…';
+      adminCall('requests', { filter: $('reqFilter').value }).then(r => {
+        if (!r.ok) { $('aReqOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        if (!r.requests.length) { $('aReqOut').innerHTML = 'No requests.'; return; }
+        $('aReqOut').innerHTML = r.requests.map(x => {
+          const auto = x.status === 'DENIED' && /Automatically denied/.test(x.note);
+          const act = (x.status === 'PENDING' || auto) ? '<input id="an_' + x.id + '" placeholder="Note to staff (optional)" style="margin-top:6px">' +
+            '<div class="row"><button class="btn green" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', true)">' + (auto ? 'Override &amp; approve' : 'Approve') + '</button>' +
+            (x.status === 'PENDING' ? '<button class="btn red" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', false)">Deny</button>' : '') + '</div>' : '';
+          return '<div class="pcard"><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
+            '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
+            '<div style="font-size:12px;color:#334">' + esc(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '') +
+            '<div style="font-size:11px;color:#94a3b8">Filed ' + esc(x.filedAt) + (x.decidedAt ? ' • decided ' + esc(x.decidedAt) : '') + '</div>' + act + '</div>';
+        }).join('');
+      }).catch(e => { $('aReqOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function decideUI(id, approve) {
+      const note = ($('an_' + id) || {}).value || '';
+      if (!confirm((approve ? 'Approve' : 'Deny') + ' this request?' + (approve ? ' The schedule will be updated automatically.' : ''))) return;
+      amsg('aReqMsg', 'Saving…', true);
+      adminCall('decide', { id: id, approve: approve, note: note }).then(r => { amsg('aReqMsg', r.message, r.ok); loadAdminRequests(); refreshNotices(); })
+        .catch(e => amsg('aReqMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function loadAdminPayslips() {
+      $('aPslOut').innerHTML = 'Loading…';
+      adminCall('payslipStatus', { markSeen: true }).then(r => {
+        if (!r.ok) { $('aPslOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        const cut = r.lastCutoff;
+        $('relCut').innerHTML = '<option value="' + cut.start + '">' + cut.start + ' to ' + cut.end + '</option>';
+        let h = '<div class="note">Next automatic release: <b>' + esc(r.nextRelease) + '</b></div>';
+        if (!r.cutoffs.length) h += '<div style="margin-top:8px">No payslips released yet.</div>';
+        r.cutoffs.forEach(g => {
+          const acc = g.rows.filter(x => x.status === 'ACCEPTED').length;
+          h += '<h4>' + esc(g.start) + ' to ' + esc(g.end) + ' — ' + acc + '/' + g.rows.length + ' accepted</h4><table><tr><th>Staff</th><th class="r">Gross</th><th>Status</th></tr>' +
+            g.rows.map(x => '<tr' + (x.isNew ? ' style="background:#f0fdf4"' : '') + '><td>' + esc(x.name) + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</td><td class="r">' + peso(x.gross) + '</td><td>' +
+              (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted</span><div style="font-size:10px;color:#667">' + esc(x.acceptedAt) + '</div>' : '<span class="chip p">Waiting</span>') + '</td></tr>').join('') + '</table>';
+        });
+        $('aPslOut').innerHTML = h;
+        refreshNotices();
+      }).catch(e => { $('aPslOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function releaseNowUI() {
+      const st = $('relCut').value; if (!st) return;
+      if (!confirm('Release (or re-release) payslips for the cutoff starting ' + st + ' now? Staff will be asked to accept again.')) return;
+      amsg('aPslMsg', 'Releasing…', true);
+      adminCall('releaseNow', { start: st }, 90000).then(r => { amsg('aPslMsg', r.message, r.ok); loadAdminPayslips(); })
+        .catch(e => amsg('aPslMsg', 'Connection error: ' + e.message, false));
+    }
+
   </script>
 </body>
 </html>
