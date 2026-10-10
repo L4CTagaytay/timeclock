@@ -1084,7 +1084,9 @@
       adminCall('payslipStatus', { markSeen: true }).then(r => {
         if (!r.ok) { $('aPslOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
         const cut = r.lastCutoff;
-        $('relCut').innerHTML = '<option value="' + cut.start + '">' + cut.start + ' to ' + cut.end + '</option>';
+        const nd = new Date(), ym = nd.getFullYear() + '-' + ('0' + (nd.getMonth() + 1)).slice(-2), last = new Date(nd.getFullYear(), nd.getMonth() + 1, 0).getDate();
+        const curS = ym + (nd.getDate() <= 15 ? '-01' : '-16'), curE = ym + (nd.getDate() <= 15 ? '-15' : '-' + last);
+        $('relCut').innerHTML = '<option value="' + curS + '">' + curS + ' to ' + curE + ' (current, early)</option><option value="' + cut.start + '">' + cut.start + ' to ' + cut.end + ' (previous)</option>';
         let h = '<div class="note">Next automatic release: <b>' + esc(r.nextRelease) + '</b></div>';
         if (!r.cutoffs.length) h += '<div style="margin-top:8px">No payslips released yet.</div>';
         r.cutoffs.forEach(g => {
