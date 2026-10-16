@@ -185,7 +185,7 @@
 
     <div class="wsched">
       <b>💵 My Payslips<span id="bdgPay"></span></b>
-      <div style="font-size:12px;color:#667;margin-top:4px">Released every 16th (for the 1st–15th) and every 1st (for the 16th–end) at 12:00 noon. Check it and tap <b>Accept</b> so your salary can be processed.</div>
+      <div style="font-size:12px;color:#667;margin-top:4px">Your payslip appears here once the admin has reviewed and released it (target: the 16th for the 1st–15th and the 1st for the 16th–end, by 12:00 noon). Check it and tap <b>Accept</b> so your salary can be processed.</div>
       <button class="sbtn" onclick="loadMyPayslips()">View my payslips</button>
       <div id="payslipsOut"></div>
     </div>
@@ -267,12 +267,14 @@
         </div>
 
         <div class="card" id="tabPsl" style="display:none">
-          <b>Released payslips &amp; acceptance</b>
-          <div id="aPslOut" class="note">Loading…</div>
-          <h4>Release now / re-release</h4>
-          <div class="note">Payslips release automatically on the 16th and the 1st at 12:00 noon. Use this only to release early or to re-release after fixing the TimeLog (staff must accept again).</div>
-          <div class="row"><select id="relCut"></select><button class="btn" style="margin-top:0" onclick="releaseNowUI()">Release</button></div>
+          <b>Payslip review &amp; release</b>
+          <div class="note">Review opens after store closing on the last day of each cutoff. Target: release by 12:00 noon on the 16th / 1st. <b>Nothing reaches staff until you tap Release.</b></div>
+          <div class="row"><select id="pslCut" onchange="loadAdminPayslips(this.value)"></select></div>
           <div class="amsg" id="aPslMsg"></div>
+          <div id="aPslOut" class="note">Loading…</div>
+          <h4>Open review early</h4>
+          <div class="note">Only if you want to start reviewing the current cutoff before its last day ends.</div>
+          <div class="row"><select id="relCut"></select><button class="btn gray" style="margin-top:0" onclick="releaseNowUI()">Open review</button></div>
         </div>
 
         <div class="card" id="tabHours" style="display:none">
@@ -973,8 +975,8 @@
       const s = currentStaff();
       api('notices', { staffId: s ? s.id : '' }, 30000).then(n => {
         if (!n || !n.ok) return;
-        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0));
-        badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', n.adminAccepted || 0);
+        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0));
+        badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0));
         if (!s) { $('staffNotice').style.display = 'none'; badge('bdgPay', 0); badge('bdgReq', 0); return; }
         badge('bdgPay', n.newPayslips || 0); badge('bdgReq', n.requestUpdates || 0);
         const msgs = [];
@@ -1004,7 +1006,9 @@
       if (p.rhHours > 0) t += '<div><span>Reg. holiday: ' + p.rhHours.toFixed(2) + ' h × ' + (p.rhMult * 100) + '%</span><span>' + peso(p.rhPay) + '</span></div>';
       if (p.shHours > 0) t += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%</span><span>' + peso(p.shPay) + '</span></div>';
       if (p.unworkedRH > 0) t += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>' + peso(p.unworkedRHPay) + '</span></div>';
-      t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div><div class="gr"><span>GROSS PAY</span><span>' + peso(p.grossPay) + '</span></div>';
+      t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>';
+      (p.adjustments || []).forEach(a => { t += '<div><span>' + esc(a.label) + '</span><span>' + (a.amount < 0 ? '−' : '+') + peso(Math.abs(a.amount)) + '</span></div>'; });
+      t += '<div class="gr"><span>GROSS PAY</span><span>' + peso(p.grossPay) + '</span></div>';
       return '<table><tr><th>Date</th><th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table><div class="tl" style="margin-top:6px">' + t + '</div>';
     }
     function loadMyPayslips() {
@@ -1012,7 +1016,7 @@
       $('payslipsOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
       api('mypayslips', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
         if (!r.ok) { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
-        if (!r.payslips.length) { $('payslipsOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No payslip released yet. The next one is released on the 16th or the 1st at 12:00 noon.</div>'; return; }
+        if (!r.payslips.length) { $('payslipsOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No payslip released yet. You will get a 🔔 notice here once the admin releases it.</div>'; return; }
         $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + esc(x.start) + ' to ' + esc(x.end) + '</b> ' +
           (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip p">Waiting for your acceptance</span>') +
           (x.slip ? staffSlipHtml(x.slip) : '') +
@@ -1110,21 +1114,73 @@
       adminCall('decide', { id: id, approve: approve, note: note }).then(r => { amsg('aReqMsg', r.message, r.ok); loadAdminRequests(); refreshNotices(); })
         .catch(e => amsg('aReqMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
-    function loadAdminPayslips() {
+    let pslData = null;
+    function adminSlipHtml(r) {
+      const p = r.slip; if (!p) return '<div class="note">No data.</div>';
+      const full = !p.released;
+      let rows = '';
+      p.days.forEach(d => {
+        rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' +
+          (full ? '<td>' + esc(d.in || '') + '</td><td>' + esc(d.out || '') + '</td>' : '') +
+          '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>';
+      });
+      let t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+        '<div><span>Regular: ' + p.regHours.toFixed(2) + ' h × ' + peso(p.rate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
+        '<div><span>OT: ' + p.otHours.toFixed(2) + ' h × ' + peso(p.rate) + ' × ' + p.otMult + '</span><span>' + peso(p.otPay) + '</span></div>';
+      if (p.rhHours > 0) t += '<div><span>Reg. holiday: ' + p.rhHours.toFixed(2) + ' h × ' + (p.rhMult * 100) + '%</span><span>' + peso(p.rhPay) + '</span></div>';
+      if (p.shHours > 0) t += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%</span><span>' + peso(p.shPay) + '</span></div>';
+      if (p.unworkedRH > 0) t += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>' + peso(p.unworkedRHPay) + '</span></div>';
+      t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>';
+      t += '<div><span><b>Computed pay</b></span><span><b>' + peso(p.basePay != null ? p.basePay : p.grossPay) + '</b></span></div>';
+      (p.adjustments || []).forEach(a => { t += '<div><span>' + esc(a.label) + '</span><span>' + (a.amount < 0 ? '−' : '+') + peso(Math.abs(a.amount)) + '</span></div>'; });
+      t += '<div class="gr"><span>GROSS PAY</span><span>' + peso(p.finalGross) + '</span></div>';
+      return '<table><tr><th>Date</th>' + (full ? '<th>In</th><th>Out</th>' : '') + '<th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table>' +
+        (p.incomplete ? '<div style="color:#b00020;font-size:12px;margin-top:4px">⚠ ' + p.incomplete + ' day(s) with a missing IN or OUT — not paid. Fix the TimeLog, then reopen this payslip.</div>' : '') +
+        '<div class="tl" style="margin-top:6px">' + t + '</div>';
+    }
+    function adjEditorHtml(r) {
+      const adj = (r.adjustments || []).concat([{ label: '', amount: '' }]);
+      return '<div style="margin-top:8px;font-size:12px;font-weight:700">Adjustments (use minus for deductions)</div><div id="adj_' + r.staffId + '">' +
+        adj.map(a => '<div class="row" style="margin-top:4px"><input class="adjL" placeholder="e.g. Allowance" value="' + esc(a.label) + '" style="flex:2"><input class="adjA" type="number" step="0.01" placeholder="±₱" value="' + (a.amount === '' ? '' : a.amount) + '" style="flex:1"></div>').join('') +
+        '</div><div class="row"><button class="btn gray" style="margin-top:6px" onclick="addAdjRow(\'' + r.staffId + '\')">+ Line</button><button class="btn" style="margin-top:6px" onclick="saveAdjUI(\'' + r.staffId + '\')">Save adjustments</button></div>';
+    }
+    function addAdjRow(id) { $('adj_' + id).insertAdjacentHTML('beforeend', '<div class="row" style="margin-top:4px"><input class="adjL" placeholder="e.g. Allowance" style="flex:2"><input class="adjA" type="number" step="0.01" placeholder="±₱" style="flex:1"></div>'); }
+    function saveAdjUI(id) {
+      const lines = [...$('adj_' + id).querySelectorAll('.row')].map(rw => ({ label: rw.querySelector('.adjL').value.trim(), amount: rw.querySelector('.adjA').value })).filter(a => a.label || a.amount !== '');
+      for (const a of lines) { if (!a.label || !Number(a.amount)) return amsg('aPslMsg', 'Each adjustment needs a description and a non-zero amount.', false); a.amount = Number(a.amount); }
+      amsg('aPslMsg', 'Saving…', true);
+      adminCall('saveAdjust', { start: pslData.detail.start, staffId: id, adjustments: lines }).then(r => { amsg('aPslMsg', r.message, r.ok); if (r.ok) loadAdminPayslips(pslData.detail.start, id); })
+        .catch(e => amsg('aPslMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function releaseUI(ids) {
+      const d = pslData.detail, n = ids === 'all' ? d.rows.filter(r => r.status === 'DRAFT').length : 1;
+      if (!n) return amsg('aPslMsg', 'Nothing waiting for release.', false);
+      if (!confirm('Release ' + n + ' payslip(s) for ' + d.start + ' to ' + d.end + ' to staff now? They will be notified to check and accept.')) return;
+      amsg('aPslMsg', 'Releasing…', true);
+      adminCall('release', { start: d.start, ids: ids }, 90000).then(r => { amsg('aPslMsg', r.message, r.ok); loadAdminPayslips(d.start); refreshNotices(); })
+        .catch(e => amsg('aPslMsg', 'Connection error: ' + e.message, false));
+    }
+    function toggleSlip(id) { const el = $('ps_' + id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+    function loadAdminPayslips(start, openId) {
       $('aPslOut').innerHTML = 'Loading…';
-      adminCall('payslipStatus', { markSeen: true }).then(r => {
+      adminCall('payslipStatus', { markSeen: true, start: start || '' }, 90000).then(r => {
         if (!r.ok) { $('aPslOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
-        const cut = r.lastCutoff;
-        const nd = new Date(), ym = nd.getFullYear() + '-' + ('0' + (nd.getMonth() + 1)).slice(-2), last = new Date(nd.getFullYear(), nd.getMonth() + 1, 0).getDate();
-        const curS = ym + (nd.getDate() <= 15 ? '-01' : '-16'), curE = ym + (nd.getDate() <= 15 ? '-15' : '-' + last);
-        $('relCut').innerHTML = '<option value="' + curS + '">' + curS + ' to ' + curE + ' (current, early)</option><option value="' + cut.start + '">' + cut.start + ' to ' + cut.end + ' (previous)</option>';
-        let h = '<div class="note">Next automatic release: <b>' + esc(r.nextRelease) + '</b></div>';
-        if (!r.cutoffs.length) h += '<div style="margin-top:8px">No payslips released yet.</div>';
-        r.cutoffs.forEach(g => {
-          const acc = g.rows.filter(x => x.status === 'ACCEPTED').length;
-          h += '<h4>' + esc(g.start) + ' to ' + esc(g.end) + ' — ' + acc + '/' + g.rows.length + ' accepted</h4><table><tr><th>Staff</th><th class="r">Gross</th><th>Status</th></tr>' +
-            g.rows.map(x => '<tr' + (x.isNew ? ' style="background:#f0fdf4"' : '') + '><td>' + esc(x.name) + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</td><td class="r">' + peso(x.gross) + '</td><td>' +
-              (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted</span><div style="font-size:10px;color:#667">' + esc(x.acceptedAt) + '</div>' : '<span class="chip p">Waiting</span>') + '</td></tr>').join('') + '</table>';
+        pslData = r;
+        const cur = r.currentCutoff;
+        $('relCut').innerHTML = '<option value="' + cur.start + '">' + cur.start + ' to ' + cur.end + ' (current)</option>';
+        $('pslCut').innerHTML = r.cutoffs.length ? r.cutoffs.map(c => '<option value="' + c.start + '"' + (r.detail && c.start === r.detail.start ? ' selected' : '') + '>' + c.start + ' to ' + c.end + ' — ' + (c.drafts ? c.drafts + ' for review, ' : '') + c.accepted + '/' + c.total + ' accepted</option>').join('') : '<option>No payslips yet</option>';
+        if (!r.detail) { $('aPslOut').innerHTML = '<div style="margin-top:8px">No payslips yet. Next review opens <b>' + esc(r.nextReview) + '</b>.</div>'; refreshNotices(); return; }
+        const d = r.detail, drafts = d.rows.filter(x => x.status === 'DRAFT').length;
+        let h = '<div style="margin-top:6px">Target release: <b>' + esc(d.target) + '</b></div>';
+        if (drafts) h += '<button class="btn green" onclick="releaseUI(\'all\')">Release all ' + drafts + ' reviewed payslips</button>';
+        d.rows.forEach(x => {
+          const chip = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">Released – waiting for acceptance</span>';
+          h += '<div class="pcard"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div><b>' + esc(x.name) + '</b> ' + chip + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</div>' +
+            '<div style="font-weight:800;color:#16a34a">' + peso(x.slip ? x.slip.finalGross : 0) + '</div></div>' +
+            '<button class="btn gray" style="margin-top:6px;padding:8px 0" onclick="toggleSlip(\'' + x.staffId + '\')">View / hide payslip</button>' +
+            '<div id="ps_' + x.staffId + '" style="display:' + (openId === x.staffId ? 'block' : 'none') + '">' + adminSlipHtml(x) +
+            (x.status !== 'ACCEPTED' ? adjEditorHtml(x) : '') +
+            (x.status === 'DRAFT' ? '<button class="btn green" onclick="releaseUI([\'' + x.staffId + '\'])">Release to ' + esc(x.name.split(' ')[0]) + '</button>' : '') + '</div></div>';
         });
         $('aPslOut').innerHTML = h;
         refreshNotices();
@@ -1132,9 +1188,9 @@
     }
     function releaseNowUI() {
       const st = $('relCut').value; if (!st) return;
-      if (!confirm('Release (or re-release) payslips for the cutoff starting ' + st + ' now? Staff will be asked to accept again.')) return;
-      amsg('aPslMsg', 'Releasing…', true);
-      adminCall('releaseNow', { start: st }, 90000).then(r => { amsg('aPslMsg', r.message, r.ok); loadAdminPayslips(); })
+      if (!confirm('Open review now for the cutoff starting ' + st + '? (Staff will not see anything until you release.)')) return;
+      amsg('aPslMsg', 'Opening review…', true);
+      adminCall('releaseNow', { start: st }, 90000).then(r => { amsg('aPslMsg', r.message, r.ok); loadAdminPayslips(st); })
         .catch(e => amsg('aPslMsg', 'Connection error: ' + e.message, false));
     }
 
