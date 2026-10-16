@@ -1,6 +1,6 @@
 // Staff Timeclock service worker: makes the app installable and opens fast.
 // Always tries the network first so staff get the newest version; falls back to the saved copy if offline.
-const CACHE = 'timeclock-v1';
+const CACHE = 'timeclock-v2';
 const SHELL = ['./', './index.html', './clock-face.png', './icon-192.png', './manifest.webmanifest'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {}));
@@ -12,7 +12,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return; // never touch API calls
-  e.respondWith(fetch(req).then(res => {
+  e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => { // always check for a newer version
     const copy = res.clone();
     caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
     return res;
