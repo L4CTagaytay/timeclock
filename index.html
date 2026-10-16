@@ -691,6 +691,9 @@
 
     function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+    // red "late" cell (more than 1 minute after the scheduled start)
+    function lateMins(d) { if (d.late) return +d.late; const m = String(d.adj || '').match(/Late (\d+)m/); return m && +m[1] > 1 ? +m[1] : 0; }
+    function inCell(d) { const lm = lateMins(d); return '<td' + (lm ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.in) + (lm ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td>'; }
     function renderSlip(p) {
       const el = $('slip');
       if (!p.ok) { el.innerHTML = '<div style="color:#b00020">' + esc(p.message || 'Could not load payslip.') + '</div>'; return; }
@@ -703,7 +706,7 @@
         const nd = new Date(), todayStr = nd.getFullYear() + '-' + ('0' + (nd.getMonth() + 1)).slice(-2) + '-' + ('0' + nd.getDate()).slice(-2);
         p.days.forEach(d => {
           if (d.note && d.date === todayStr && d.in && d.in !== '—' && (!d.out || d.out === '—')) { d.note = ''; d.onShift = true; onShift++; }
-          r2 += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td><td>' + esc(d.in) + '</td><td>' + esc(d.out) + '</td>' +
+          r2 += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' + inCell(d) + '<td>' + esc(d.out) + '</td>' +
             '<td class="r">' + (d.onShift ? '<span style="color:#1a73e8">on shift</span>' : d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : (d.hours || 0).toFixed(2)) + '</td></tr>';
         });
         el.innerHTML = '<h3>' + esc(p.name) + '</h3>' +
@@ -720,7 +723,7 @@
       }
       let rows = '';
       p.days.forEach(d => {
-        rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td><td>' + esc(d.in) + '</td><td>' + esc(d.out) + '</td>' +
+        rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' + inCell(d) + '<td>' + esc(d.out) + '</td>' +
           '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td>' +
           '<td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>';
       });
@@ -999,7 +1002,7 @@
     // ===================== STAFF PAYSLIPS =====================
     function staffSlipHtml(p) {
       let rows = '';
-      p.days.forEach(d => { rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td><td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>'; });
+      p.days.forEach(d => { const lm = lateMins(d); rows += '<tr><td' + (lm ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + (lm ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td><td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>'; });
       let t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
         '<div><span>Regular: ' + p.regHours.toFixed(2) + ' h × ' + peso(p.rate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
         '<div><span>OT: ' + p.otHours.toFixed(2) + ' h × ' + peso(p.rate) + ' × ' + p.otMult + '</span><span>' + peso(p.otPay) + '</span></div>';
