@@ -1121,7 +1121,8 @@
       let rows = '';
       p.days.forEach(d => {
         rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' +
-          (full ? '<td>' + esc(d.in || '') + '</td><td>' + esc(d.out || '') + '</td>' : '') +
+          (full ? (function () { const lm = (String(d.adj || '').match(/Late (\d+)m/) || [])[1]; const late = lm && +lm > 1;
+            return '<td' + (late ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.in || '') + (late ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td><td>' + esc(d.out || '') + '</td>'; })() : '') +
           '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>';
       });
       let t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
