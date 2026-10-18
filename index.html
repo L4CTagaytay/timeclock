@@ -235,6 +235,7 @@
           <button id="subHol" onclick="adminTab('hol')">📅 Holidays</button>
           <button id="subReq" onclick="adminTab('req')">📝 Requests<span id="bdgAReq"></span></button>
           <button id="subPsl" onclick="adminTab('psl')">✅ Payslips<span id="bdgAPsl"></span></button>
+          <button id="subStaff" onclick="adminTab('staff')">👥 Staff</button>
         </div>
 
         <div class="card" id="tabPay">
@@ -277,6 +278,25 @@
           <div class="row"><select id="relCut"></select><button class="btn gray" style="margin-top:0" onclick="releaseNowUI()">Open review</button></div>
         </div>
 
+        <div class="card" id="tabStaff" style="display:none">
+          <b>Staff</b>
+          <div class="note">Removing a staff member only deactivates them — their time records and payslips are kept. Temporary staff are switched off automatically after their last day.</div>
+          <div class="amsg" id="stMsg"></div>
+          <div id="stOut" class="note">Loading…</div>
+          <h4>Add staff</h4>
+          <div class="row"><select id="stType" onchange="stTypeChange()"><option value="REGULAR">Regular staff (hourly rate)</option><option value="TEMP">Temporary staff (fixed daily rate)</option></select></div>
+          <div class="row"><input type="text" id="stName" placeholder="Full name"></div>
+          <div class="row" id="stRegRow"><input type="number" id="stRate" min="0" step="0.01" inputmode="decimal" placeholder="Hourly rate (₱)"></div>
+          <div id="stTempRows" style="display:none">
+            <div class="row"><input type="number" id="stDaily" min="0" step="0.01" inputmode="decimal" placeholder="Fixed daily rate (₱ per day with IN and OUT)"></div>
+            <div class="row"><label style="font-size:12px;color:#556;flex:1">From<input type="date" id="stFrom"></label><label style="font-size:12px;color:#556;flex:1">To<input type="date" id="stTo"></label></div>
+            <div class="row"><select id="stHost"></select></div>
+            <div class="note">The temporary staff can only TIME IN / OUT on this regular staff member's phone (that person must have opened the updated app on their phone at least once). He must also be on the work schedule. No late deductions, overtime or holiday premium — pay = days with IN and OUT × daily rate.</div>
+          </div>
+          <button class="btn green" onclick="addStaffUI()">Add staff</button>
+          <div id="stNew"></div>
+        </div>
+
         <div class="card" id="tabHours" style="display:none">
           <b>Store operating hours</b>
           <div class="note">Time in/out pay rules (late rounding, pay stops at closing) follow these hours. Changes apply to every staff member's computation right away.</div>
@@ -312,6 +332,11 @@
     let pending = null;       // { type, assertion, pin } waiting for a selfie
 
     const $ = id => document.getElementById(id);
+    // Phone id (stays on this phone) so the admin can assign a temporary staff to a regular staff member's phone
+    const DEVICE_ID = (function () {
+      try { let d = localStorage.getItem('tcDeviceId'); if (!d) { d = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('tcDeviceId', d); } return d; }
+      catch (e) { return ''; }
+    })();
 
     // POST to the spreadsheet API with a timeout; the answer comes back as JSON
     function apiOnce(action, data, timeoutMs) {
@@ -319,7 +344,7 @@
       const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs || 25000) : null;
       return fetch(API, {
         method: 'POST', redirect: 'follow', cache: 'no-store', credentials: 'omit',
-        body: JSON.stringify(Object.assign({ action: action }, data || {})),
+        body: JSON.stringify(Object.assign({ action: action, device: DEVICE_ID }, data || {})),
         signal: ctrl ? ctrl.signal : undefined
       }).then(r => r.text()).then(txt => {
         if (timer) clearTimeout(timer);
@@ -380,7 +405,7 @@
         sel.innerHTML = '<option value="">— Select your name —</option>';
         staffList.forEach(s => {
           const o = document.createElement('option');
-          o.value = s.id; o.textContent = s.name;
+          o.value = s.id; o.textContent = s.name + (s.temp ? ' (temporary)' : '');
           sel.appendChild(o);
         });
         if (keep) sel.value = keep;
@@ -395,6 +420,7 @@
     }
     loadStaff();
 
+    function notePhone(staffId, pin) { if (staffId && pin) api('notephone', { staffId: staffId, pin: pin }).catch(() => {}); }
     function currentStaff() { return staffList.find(s => s.id === $('staff').value) || null; }
 
     $('staff').addEventListener('change', () => onStaffChange(true));
@@ -409,6 +435,12 @@
       if (!window.PublicKeyCredential) {
         st.className = 'fpstatus no';
         st.textContent = 'This browser does not support fingerprint. Please open this link in Chrome (Android) or Safari (iPhone).';
+        $('btnReg').style.display = 'none';
+        return;
+      }
+      if (s.temp) {
+        st.className = 'fpstatus yes';
+        st.textContent = '🕑 Temporary staff — enter your PIN, then tap TIME IN / TIME OUT. Works only on the phone the admin assigned to you.';
         $('btnReg').style.display = 'none';
         return;
       }
@@ -685,6 +717,7 @@
       if (!pin) { el.innerHTML = '<div style="color:#b00020">Please enter your access code to view your time record.</div>'; return; }
       el.innerHTML = '<div style="text-align:center;color:#1a73e8;font-weight:600">Loading…</div>';
       api('payslip', { staffId: s.id, which: which, pin: pin })
+        .then(r => { if (r && r.ok && r.staffOnly && !s.temp) notePhone(s.id, pin); return r; })
         .then(renderSlip)
         .catch(e => { el.innerHTML = '<div style="color:#b00020">Error: ' + esc(e.message) + '</div>'; });
     }
@@ -736,8 +769,11 @@
       if (p.unworkedRH > 0) lines += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>₱' + p.unworkedRHPay.toFixed(2) + '</span></div>';
       lines += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>' +
         '<div class="gross"><span>GROSS PAY</span><span>₱' + p.grossPay.toFixed(2) + '</span></div>';
+      if (p.temp) lines = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+        '<div><span>Fixed daily rate: ' + p.daysWorked + ' day(s) × ' + peso(p.dailyRate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
+        '<div class="gross"><span>GROSS PAY</span><span>₱' + p.grossPay.toFixed(2) + '</span></div>';
       el.innerHTML = '<h3>' + esc(p.name) + '</h3>' +
-        '<div class="sub">Cutoff: ' + esc(p.cutoff) + ' &nbsp;•&nbsp; Rate: ₱' + p.rate.toFixed(2) + '/hr</div>' +
+        '<div class="sub">Cutoff: ' + esc(p.cutoff) + ' &nbsp;•&nbsp; Rate: ' + (p.temp ? peso(p.dailyRate) + '/day (temporary)' : '₱' + p.rate.toFixed(2) + '/hr') + '</div>' +
         '<table><tr><th>Date</th><th>In</th><th>Out</th><th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table>' +
         (p.days.some(d => d.tag) ? '<div style="font-size:10px;color:#889;margin-top:3px">RH = regular holiday, SNH = special non-working</div>' : '') +
         '<div class="totals">' + lines + '</div>' +
@@ -786,7 +822,7 @@
       $('payOut').innerHTML = 'Pick a month and tap Show.';
     }
     function adminTab(t) {
-      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl']].forEach(x => {
+      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl'], ['staff', 'tabStaff', 'subStaff']].forEach(x => {
         $(x[1]).style.display = x[0] === t ? 'block' : 'none';
         $(x[2]).className = x[0] === t ? 'on' : '';
       });
@@ -794,6 +830,7 @@
       if (t === 'hol') loadHolidays();
       if (t === 'req') loadAdminRequests();
       if (t === 'psl') loadAdminPayslips();
+      if (t === 'staff') loadAdminStaff();
       if (t === 'sched' && !$('schMonth').value) { const n = new Date(); $('schMonth').value = n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2); $('schHalf').value = n.getDate() <= 15 ? '1' : '2'; loadAdminSched(); }
     }
     function loadSummary() {
@@ -999,6 +1036,107 @@
       return { s: s, pin: pin };
     }
 
+
+    // ===================== ADMIN: STAFF =====================
+    let stList = [];
+    function stTypeChange() {
+      const temp = $('stType').value === 'TEMP';
+      $('stRegRow').style.display = temp ? 'none' : 'flex';
+      $('stTempRows').style.display = temp ? 'block' : 'none';
+    }
+    function hostOptions(sel) {
+      return '<option value="">— Uses the phone of (regular staff) —</option>' + stList.filter(x => x.active && x.type !== 'TEMP')
+        .map(x => '<option value="' + esc(x.id) + '"' + (x.id === sel ? ' selected' : '') + '>' + esc(x.name) + (x.hasPhone ? '' : ' (phone not seen yet)') + '</option>').join('');
+    }
+    function loadAdminStaff() {
+      $('stOut').innerHTML = 'Loading…';
+      adminCall('staffList').then(r => {
+        if (!r.ok) { $('stOut').innerHTML = ''; return amsg('stMsg', r.message || 'Could not load staff.', false); }
+        stList = r.staff || []; renderAdminStaff();
+      }).catch(e => { $('stOut').innerHTML = ''; amsg('stMsg', 'Connection error: ' + e.message, false); });
+    }
+    function stCard(x) {
+      const temp = x.type === 'TEMP';
+      const info = temp
+        ? '<span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:11px">TEMPORARY</span> ' + peso(x.dailyRate) + '/day · ' + esc(x.from) + ' to ' + esc(x.to) + '<br>Uses ' + (x.hostName ? esc(x.hostName) + '’s phone' : '<b style="color:#b00020">no phone assigned</b>')
+        : peso(x.rate) + '/hr · Phone: ' + (x.hasPhone ? 'registered' : '<span style="color:#b45309">not registered</span>');
+      const b = (label, fn, cls) => '<button class="btn ' + (cls || 'gray') + '" style="margin:4px 4px 0 0;padding:6px 10px;width:auto;font-size:12px" onclick="' + fn + '">' + label + '</button>';
+      return '<div style="border:1px solid #e3e8ef;border-radius:10px;padding:8px 10px;margin:6px 0;' + (x.active ? '' : 'opacity:.6') + '">' +
+        '<b>' + esc(x.name) + '</b> <span style="color:#889;font-size:12px">' + esc(x.id) + '</span><div style="font-size:12px;color:#445;margin-top:2px">' + info + '</div>' +
+        '<div>' + (x.active
+          ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🔑 New code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
+          : b('Re-activate', "stSetActive('" + x.id + "',true)")) + '</div>' +
+        '<div id="stEd_' + esc(x.id) + '"></div></div>';
+    }
+    function renderAdminStaff() {
+      const act = stList.filter(x => x.active), ina = stList.filter(x => !x.active);
+      $('stOut').innerHTML = '<h4 style="margin-top:6px">Active (' + act.length + ')</h4>' + (act.map(stCard).join('') || '<div class="note">None.</div>') +
+        (ina.length ? '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">Removed / inactive (' + ina.length + ')</summary>' + ina.map(stCard).join('') + '</details>' : '');
+      $('stHost').innerHTML = hostOptions($('stHost').value);
+    }
+    function stEdit(id) {
+      const x = stList.find(v => v.id === id), box = $('stEd_' + id);
+      if (!x || !box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      const temp = x.type === 'TEMP';
+      box.innerHTML = '<div style="margin-top:6px;border-top:1px dashed #dde;padding-top:6px">' +
+        '<div class="row"><input type="text" id="seName_' + id + '" value="' + esc(x.name) + '" placeholder="Full name"></div>' +
+        (temp
+          ? '<div class="row"><input type="number" id="seDaily_' + id + '" value="' + x.dailyRate + '" step="0.01" placeholder="Daily rate"></div>' +
+            '<div class="row"><label style="font-size:12px;flex:1">From<input type="date" id="seFrom_' + id + '" value="' + esc(x.from) + '"></label><label style="font-size:12px;flex:1">To<input type="date" id="seTo_' + id + '" value="' + esc(x.to) + '"></label></div>' +
+            '<div class="row"><select id="seHost_' + id + '">' + hostOptions(x.host) + '</select></div>'
+          : '<div class="row"><input type="number" id="seRate_' + id + '" value="' + x.rate + '" step="0.01" placeholder="Hourly rate"></div>') +
+        '<button class="btn green" style="margin-top:4px" onclick="stSave(\'' + id + '\')">Save changes</button></div>';
+    }
+    function stSave(id) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      const d = { id: id, name: $('seName_' + id).value };
+      if (x.type === 'TEMP') { d.dailyRate = $('seDaily_' + id).value; d.from = $('seFrom_' + id).value; d.to = $('seTo_' + id).value; d.host = $('seHost_' + id).value; }
+      else d.rate = $('seRate_' + id).value;
+      amsg('stMsg', 'Saving…', true);
+      adminCall('updateStaff', d).then(r => { amsg('stMsg', r.message || (r.ok ? 'Saved.' : 'Not saved.'), r.ok); if (r.ok) { loadAdminStaff(); loadStaff(); } })
+        .catch(e => amsg('stMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function showNewCode(name, id, pin, title) {
+      $('stNew').innerHTML = '<div style="margin-top:10px;border:2px solid #16a34a;border-radius:10px;padding:10px;background:#f0fdf4">' +
+        '<b>' + esc(title) + '</b><br>' + esc(name) + ' (' + esc(id) + ')<div style="font-size:28px;letter-spacing:6px;font-weight:700;margin:6px 0">' + esc(pin) + '</div>' +
+        '<div style="font-size:12px;color:#445">Give this access code to the staff member now. It is shown only once (you can always make a new one).</div>' +
+        '<button class="btn gray" style="margin-top:6px" onclick="$(\'stNew\').innerHTML=\'\'">Done — hide code</button></div>';
+      $('stNew').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function addStaffUI() {
+      const temp = $('stType').value === 'TEMP';
+      const d = { type: temp ? 'TEMP' : 'REGULAR', name: $('stName').value };
+      if (temp) { d.dailyRate = $('stDaily').value; d.from = $('stFrom').value; d.to = $('stTo').value; d.host = $('stHost').value; }
+      else d.rate = $('stRate').value;
+      amsg('stMsg', 'Adding…', true);
+      adminCall('addStaff', d).then(r => {
+        amsg('stMsg', r.message || (r.ok ? 'Added.' : 'Not added.'), r.ok);
+        if (!r.ok) return;
+        showNewCode(d.name.trim(), r.id, r.pin, 'New staff added — access code (PIN):');
+        ['stName', 'stRate', 'stDaily', 'stFrom', 'stTo'].forEach(k => $(k).value = '');
+        loadAdminStaff(); loadStaff();
+      }).catch(e => amsg('stMsg', 'Connection error — check the list before trying again. ' + e.message, false));
+    }
+    function stResetPin(id) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!confirm('Make a new access code for ' + x.name + '? The old code will stop working.')) return;
+      adminCall('resetPin', { id: id }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) showNewCode(x.name, id, r.pin, 'New access code (PIN):'); })
+        .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
+    }
+    function stResetPhone(id) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!confirm('Clear ' + x.name + '’s registered phone? They will register their new phone with their access code. Temporary staff assigned to this person must wait until the new phone opens the app.')) return;
+      adminCall('resetPhone', { id: id }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) { loadAdminStaff(); loadStaff(); } })
+        .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
+    }
+    function stSetActive(id, active) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!active && !confirm('Remove ' + x.name + ' from the active staff? Their time records and payslips are kept and you can re-activate them later.')) return;
+      adminCall('setActive', { id: id, active: active }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) { loadAdminStaff(); loadStaff(); } })
+        .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
+    }
+
     // ===================== STAFF PAYSLIPS =====================
     function staffSlipHtml(p) {
       let rows = '';
@@ -1010,6 +1148,7 @@
       if (p.shHours > 0) t += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%</span><span>' + peso(p.shPay) + '</span></div>';
       if (p.unworkedRH > 0) t += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>' + peso(p.unworkedRHPay) + '</span></div>';
       t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>';
+      if (p.temp) t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div><div><span>Fixed daily rate: ' + p.daysWorked + ' day(s) × ' + peso(p.dailyRate) + '</span><span>' + peso(p.regPay) + '</span></div>';
       (p.adjustments || []).forEach(a => { t += '<div><span>' + esc(a.label) + '</span><span>' + (a.amount < 0 ? '−' : '+') + peso(Math.abs(a.amount)) + '</span></div>'; });
       t += '<div class="gr"><span>GROSS PAY</span><span>' + peso(p.grossPay) + '</span></div>';
       return '<table><tr><th>Date</th><th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table><div class="tl" style="margin-top:6px">' + t + '</div>';
@@ -1018,6 +1157,7 @@
       const a = needPin('payslipsOut'); if (!a) return;
       $('payslipsOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
       api('mypayslips', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (r && r.ok && !a.s.temp) notePhone(a.s.id, a.pin);
         if (!r.ok) { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         if (!r.payslips.length) { $('payslipsOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No payslip released yet. You will get a 🔔 notice here once the admin releases it.</div>'; return; }
         $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + esc(x.start) + ' to ' + esc(x.end) + '</b> ' +
@@ -1135,6 +1275,7 @@
       if (p.shHours > 0) t += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%</span><span>' + peso(p.shPay) + '</span></div>';
       if (p.unworkedRH > 0) t += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>' + peso(p.unworkedRHPay) + '</span></div>';
       t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>';
+      if (p.temp) t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div><div><span>Fixed daily rate (temporary): ' + p.daysWorked + ' day(s) × ' + peso(p.dailyRate) + '</span><span>' + peso(p.regPay) + '</span></div>';
       t += '<div><span><b>Computed pay</b></span><span><b>' + peso(p.basePay != null ? p.basePay : p.grossPay) + '</b></span></div>';
       (p.adjustments || []).forEach(a => { t += '<div><span>' + esc(a.label) + '</span><span>' + (a.amount < 0 ? '−' : '+') + peso(Math.abs(a.amount)) + '</span></div>'; });
       t += '<div class="gr"><span>GROSS PAY</span><span>' + peso(p.finalGross) + '</span></div>';
