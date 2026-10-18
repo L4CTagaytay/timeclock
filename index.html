@@ -291,7 +291,7 @@
             <div class="row"><input type="number" id="stDaily" min="0" step="0.01" inputmode="decimal" placeholder="Fixed daily rate (₱ per day with IN and OUT)"></div>
             <div class="row"><label style="font-size:12px;color:#556;flex:1">From<input type="date" id="stFrom"></label><label style="font-size:12px;color:#556;flex:1">To<input type="date" id="stTo"></label></div>
             <div class="row"><select id="stHost"></select></div>
-            <div class="note">The temporary staff can only TIME IN / OUT on this regular staff member's phone (that person must have done at least one TIME IN or OUT on the updated app first, so the phone is recognised). He must also be on the work schedule. No late deductions, overtime or holiday premium — pay = days with IN and OUT × daily rate.</div>
+            <div class="note">The temporary staff can only TIME IN / OUT on this regular staff member's phone (it works right away: the phone he first punches on is saved as that person's phone, and after that only that phone works). He must also be on the work schedule. No late deductions, overtime or holiday premium — pay = days with IN and OUT × daily rate.</div>
           </div>
           <button class="btn green" onclick="addStaffUI()">Add staff</button>
           <div id="stNew"></div>
@@ -1046,7 +1046,7 @@
     }
     function hostOptions(sel) {
       return '<option value="">— Uses the phone of (regular staff) —</option>' + stList.filter(x => x.active && x.type !== 'TEMP')
-        .map(x => '<option value="' + esc(x.id) + '"' + (x.id === sel ? ' selected' : '') + '>' + esc(x.name) + (x.appPhone ? '' : ' (phone not recognised yet)') + '</option>').join('');
+        .map(x => '<option value="' + esc(x.id) + '"' + (x.id === sel ? ' selected' : '') + '>' + esc(x.name) + '' + '</option>').join('');
     }
     function loadAdminStaff() {
       $('stOut').innerHTML = 'Loading…';
