@@ -405,7 +405,7 @@
         sel.innerHTML = '<option value="">— Select your name —</option>';
         staffList.forEach(s => {
           const o = document.createElement('option');
-          o.value = s.id; o.textContent = s.name + (s.temp ? ' (temporary)' : '');
+          o.value = s.id; o.textContent = s.name + (s.payslipOnly ? ' (temporary – payslip only)' : s.temp ? ' (temporary)' : '');
           sel.appendChild(o);
         });
         if (keep) sel.value = keep;
@@ -435,6 +435,13 @@
       if (!window.PublicKeyCredential) {
         st.className = 'fpstatus no';
         st.textContent = 'This browser does not support fingerprint. Please open this link in Chrome (Android) or Safari (iPhone).';
+        $('btnReg').style.display = 'none';
+        return;
+      }
+      if (s.payslipOnly) {
+        $('btnIn').disabled = true; $('btnOut').disabled = true;
+        st.className = 'fpstatus yes';
+        st.textContent = '🧾 Your temporary work period has ended. Enter your code, then open My Payslips to check and accept your final payslip.';
         $('btnReg').style.display = 'none';
         return;
       }
@@ -648,6 +655,7 @@
             punching = false; setBusy(false);
             punchResult(!!res.ok, res.message || (res.ok ? '' : 'The server did not accept the punch.'));
             if (res.ok) $('pin').value = '';
+            if (res.finalPayslip) setTimeout(refreshNotices, 1500);
             prefetchChallenge();
           })
           .catch(e => {
@@ -1015,8 +1023,8 @@
       const s = currentStaff();
       api('notices', { staffId: s ? s.id : '' }, 30000).then(n => {
         if (!n || !n.ok) return;
-        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0));
-        badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0));
+        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
+        badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
         if (!s) { $('staffNotice').style.display = 'none'; badge('bdgPay', 0); badge('bdgReq', 0); return; }
         badge('bdgPay', n.newPayslips || 0); badge('bdgReq', n.requestUpdates || 0);
         const msgs = [];
@@ -1160,7 +1168,7 @@
         if (r && r.ok && !a.s.temp) notePhone(a.s.id, a.pin);
         if (!r.ok) { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         if (!r.payslips.length) { $('payslipsOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No payslip released yet. You will get a 🔔 notice here once the admin releases it.</div>'; return; }
-        $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + esc(x.start) + ' to ' + esc(x.end) + '</b> ' +
+        $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + (x.final ? 'Final payslip: ' + esc(x.period) : esc(x.start) + ' to ' + esc(x.end)) + '</b> ' +
           (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip p">Waiting for your acceptance</span>') +
           (x.slip ? staffSlipHtml(x.slip) : '') +
           (x.status !== 'ACCEPTED' ? '<button class="sbtn green" onclick="acceptSlipUI(\'' + x.start + '\')">✅ I checked it — Accept payslip</button>' : '') + '</div>').join('');
@@ -1319,8 +1327,9 @@
         let h = '<div style="margin-top:6px">Target release: <b>' + esc(d.target) + '</b></div>';
         if (drafts) h += '<button class="btn green" onclick="releaseUI(\'all\')">Release all ' + drafts + ' reviewed payslips</button>';
         d.rows.forEach(x => {
-          const chip = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">Released – waiting for acceptance</span>';
-          h += '<div class="pcard"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div><b>' + esc(x.name) + '</b> ' + chip + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</div>' +
+          const chip = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">' + (x.kind === 'TEMP-FINAL' ? 'Sent automatically' : 'Released') + ' – waiting for acceptance</span>';
+          const fin = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e">Temporary – final ' + esc(x.period) + '</span>' : '';
+          h += '<div class="pcard"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div><b>' + esc(x.name) + '</b> ' + chip + fin + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</div>' +
             '<div style="font-weight:800;color:#16a34a">' + peso(x.slip ? x.slip.finalGross : 0) + '</div></div>' +
             '<button class="btn gray" style="margin-top:6px;padding:8px 0" onclick="toggleSlip(\'' + x.staffId + '\')">View / hide payslip</button>' +
             '<div id="ps_' + x.staffId + '" style="display:' + (openId === x.staffId ? 'block' : 'none') + '">' + adminSlipHtml(x) +
