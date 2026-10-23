@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f51f6f">
   <title>Staff Timeclock</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -13,210 +13,337 @@
   <meta name="apple-mobile-web-app-title" content="Timeclock">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
-    body { background: #f0f4f8; min-height: 100vh; display: flex; justify-content: center; }
-    .app { width: 100%; max-width: 420px; padding: 20px 16px 40px; }
-    h1 { font-size: 22px; color: #1a2a3a; text-align: center; margin: 8px 0 2px; }
-    .logo-clock { position: relative; width: 84px; height: 84px; margin: 4px auto 0; border-radius: 20px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+    :root { --pink: #f51f6f; --pink2: #ff4d8d; --pinkbg: #fff0f5; --ink: #111114; --sub: #6b6b76; --line: #ececf1; --bg: #f4f4f7; --green: #16a34a; --red: #e11d48; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); min-height: 100vh; display: flex; justify-content: center; color: var(--ink); }
+    .app { width: 100%; max-width: 440px; padding: 0 16px calc(100px + env(safe-area-inset-bottom)); }
+    /* header */
+    .hdr { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; margin: 0 -16px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: rgba(17,17,20,.94); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); color: #fff; }
+    .logo-clock { position: relative; width: 40px; height: 40px; border-radius: 11px; overflow: hidden; flex: none; box-shadow: 0 2px 8px rgba(245,31,111,.35); }
     .logo-clock img, .logo-clock svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-    .install { display: none; margin: 8px auto 0; padding: 10px 16px; font-size: 14px; background: #f51f6f; border-radius: 12px; flex: none; width: 100%; }
-    .ioshint { display: none; font-size: 12px; color: #667; text-align: center; margin-top: 6px; }
-    .clock { text-align: center; font-size: 34px; font-weight: 700; color: #1a73e8; letter-spacing: 1px; }
-    .date { text-align: center; color: #667; font-size: 14px; margin-bottom: 16px; }
-    label { display: block; font-size: 13px; font-weight: 600; color: #445; margin: 14px 0 6px; }
-    select, #pin { width: 100%; padding: 14px; font-size: 17px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; }
-    #pin { letter-spacing: 4px; }
-    .fpstatus { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; display: none; }
-    .fpstatus.yes { display: block; background: #e0f2fe; color: #075985; }
-    .fpstatus.no { display: block; background: #fef3c7; color: #78350f; }
-    .cam-box { margin-top: 14px; border-radius: 16px; overflow: hidden; background: #dde5ee; position: relative; aspect-ratio: 4/3; }
+    .hdr .ttl { flex: 1; line-height: 1.15; }
+    .hdr .t1 { font-size: 16px; font-weight: 800; letter-spacing: .2px; }
+    .hdr .t2 { font-size: 11px; color: #b9b9c6; }
+    .pill { flex: none; padding: 8px 14px; font-size: 13px; font-weight: 700; border: 0; border-radius: 999px; color: #fff; background: rgba(255,255,255,.14); cursor: pointer; }
+    #navStaff.on, #navAdmin.on { display: none; }
+    /* shared */
+    .card, .wsched { background: #fff; border-radius: 20px; padding: 16px; margin-top: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(17,17,20,.05); }
+    .card h2, .wsched h2 { font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+    .hint { font-size: 13px; color: var(--sub); margin-top: 4px; line-height: 1.4; }
+    h1.big { font-size: 30px; font-weight: 800; letter-spacing: -.5px; margin: 18px 2px 0; }
+    label, .lbl { display: block; font-size: 12px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .5px; margin: 0 0 6px 2px; }
+    select, #pin, .wsched input, .wsched select, .wsched textarea { width: 100%; padding: 14px 14px; font-size: 16px; border: 1.5px solid var(--line); border-radius: 14px; background: #fafafc; color: var(--ink); font-family: inherit; -webkit-appearance: none; appearance: none; }
+    select { background-image: linear-gradient(45deg, transparent 50%, #9a9aa6 50%), linear-gradient(135deg, #9a9aa6 50%, transparent 50%); background-position: calc(100% - 20px) 52%, calc(100% - 14px) 52%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 36px; }
+    select:focus, #pin:focus, .wsched input:focus, .wsched textarea:focus { outline: none; border-color: var(--pink); background: #fff; }
+    .wsched input, .wsched select, .wsched textarea { margin-top: 8px; font-size: 15px; padding: 12px; }
+    #pin { letter-spacing: 6px; text-align: center; margin-top: 10px; }
+    #pin::placeholder { letter-spacing: 0; font-size: 14px; }
+    button { flex: 1; padding: 16px 0; font-size: 17px; font-weight: 700; border: none; border-radius: 16px; color: #fff; cursor: pointer; transition: transform .08s, opacity .2s; }
+    button:active { transform: scale(.97); }
+    button:disabled { opacity: .35; }
+    .fpstatus { margin-top: 10px; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.35; display: none; }
+    .fpstatus.yes { display: block; background: #f3f4ff; color: #3730a3; }
+    .fpstatus.no { display: block; background: #fff7e6; color: #8a4b00; }
+    #sHome #idcard { padding: 12px 14px; margin-top: 12px; } #sHome #idcard label { display: none; }
+    .reg { display: none; width: 100%; margin-top: 10px; padding: 14px 0; font-size: 15px; background: var(--ink); }
+    /* home */
+    .hero { text-align: center; padding: 14px 0 0; }
+    .clock { font-size: 46px; font-weight: 800; letter-spacing: -1.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .date { color: var(--sub); font-size: 15px; margin-top: 2px; }
+    .loc { display: inline-block; margin-top: 10px; padding: 6px 12px; border-radius: 999px; background: #fff; font-size: 12px; color: var(--sub); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .cam-box { width: 132px; height: 132px; margin: 14px auto 0; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #2a2a30, #111114); position: relative; box-shadow: 0 0 0 4px #fff, 0 0 0 7px var(--pink), 0 10px 30px rgba(245,31,111,.25); }
     video, canvas { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
-    .cam-hint { position: absolute; bottom: 8px; left: 8px; right: 8px; text-align: center; color: #fff; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
-    .btns { display: flex; gap: 12px; margin-top: 18px; }
-    button { flex: 1; padding: 18px 0; font-size: 18px; font-weight: 700; border: none; border-radius: 14px; color: #fff; cursor: pointer; }
-    button:disabled { opacity: .45; }
-    .in { background: #16a34a; }
-    .out { background: #dc2626; }
-    .reg { display: none; width: 100%; margin-top: 10px; padding: 14px 0; font-size: 15px; background: #7c3aed; }
-    .finish { display: none; width: 100%; margin-top: 12px; padding: 16px 0; font-size: 16px; background: #0f766e; }
-    .msg { margin-top: 16px; padding: 14px; border-radius: 12px; font-size: 15px; text-align: center; display: none; }
-    .msg.ok { display: block; background: #dcfce7; color: #14532d; }
-    .msg.err { display: block; background: #fee2e2; color: #7f1d1d; }
-    .result { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
-    .result .box { background: #fff; border-radius: 18px; padding: 26px 20px; width: 100%; max-width: 360px; text-align: center; }
-    .result .big { font-size: 30px; font-weight: 800; margin: 6px 0 10px; }
-    .result.ok .big { color: #16a34a; } .result.bad .big { color: #dc2626; }
-    .result .icon { font-size: 54px; }
-    .result .detail { font-size: 15px; color: #334; margin-bottom: 8px; }
-    .result .again { font-size: 15px; font-weight: 700; color: #b91c1c; margin-bottom: 8px; }
-    .result button { margin-top: 10px; width: 100%; padding: 14px; font-size: 17px; border: 0; border-radius: 12px; color: #fff; background: #1a73e8; }
-    .spin { display: none; text-align: center; margin-top: 16px; color: #1a73e8; font-weight: 600; }
-    .slip-btns { display: flex; gap: 12px; }
-    .slip-btns button { padding: 12px 0; font-size: 14px; background: #1a73e8; }
-    .slip { margin-top: 14px; background: #fff; border-radius: 14px; padding: 14px; display: none; }
-    .slip h3 { font-size: 16px; color: #1a2a3a; margin-bottom: 2px; }
-    .slip .sub { font-size: 12px; color: #667; margin-bottom: 10px; }
-    .slip table { border-collapse: collapse; width: 100%; font-size: 12px; }
-    .slip th, .slip td { border: 1px solid #dde3ec; padding: 5px 6px; text-align: left; }
-    .slip th { background: #eef3fd; font-size: 11px; }
-    .slip td.r, .slip th.r { text-align: right; }
-    .slip .totals { margin-top: 10px; font-size: 13px; }
-    .slip .totals div { display: flex; justify-content: space-between; padding: 3px 0; }
-    .slip .gross { font-weight: 800; font-size: 16px; color: #16a34a; border-top: 2px solid #dde3ec; margin-top: 4px; padding-top: 8px !important; }
-    .slip .warn { color: #b00020; font-size: 12px; margin-top: 8px; }
-    .topnav { display: flex; gap: 8px; margin-bottom: 10px; }
-    .topnav button { padding: 10px 0; font-size: 14px; background: #cbd5e1; color: #1e293b; border-radius: 10px; }
-    .topnav button.on { background: #1a73e8; color: #fff; }
-    .adm { font-size: 14px; color: #1a2a3a; }
-    .adm .card { background: #fff; border-radius: 14px; padding: 14px; margin-top: 12px; }
-    .adm input, .adm select { width: 100%; padding: 10px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
-    .adm .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-    .adm .row > * { flex: 1; }
-    .adm .row .lbl { flex: 0 0 52px; font-weight: 700; }
-    .adm .btn { padding: 12px 0; font-size: 15px; background: #1a73e8; border-radius: 10px; width: 100%; margin-top: 10px; }
-    .adm .btn.gray { background: #64748b; } .adm .btn.red { background: #dc2626; } .adm .btn.green { background: #16a34a; }
-    .adm .subnav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-    .adm .subnav button { flex: 1 1 30%; }
-    .badge { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 9px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; line-height: 16px; text-align: center; }
-    .snotice { margin-top: 12px; padding: 12px; border-radius: 12px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-size: 14px; font-weight: 600; }
-    .wsched input, .wsched select, .wsched textarea { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; margin-top: 6px; font-family: inherit; }
-    .sbtn { width: 100%; padding: 12px 0; font-size: 14px; background: #1a73e8; border-radius: 10px; margin-top: 8px; }
-    .sbtn.green { background: #16a34a; } .sbtn.gray { background: #64748b; }
-    .pcard { border: 1px solid #dde3ec; border-radius: 12px; padding: 10px; margin-top: 10px; background: #fff; }
-    .pcard table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 6px; }
-    .pcard th, .pcard td { border: 1px solid #dde3ec; padding: 4px 6px; text-align: left; }
-    .pcard th { background: #eef3fd; } .pcard td.r, .pcard th.r { text-align: right; }
-    .pcard .tl div { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; }
-    .pcard .gr { font-weight: 800; color: #16a34a; font-size: 15px; border-top: 2px solid #dde3ec; margin-top: 4px; padding-top: 6px !important; }
-    .chip { display: inline-block; padding: 2px 8px; border-radius: 9px; font-size: 11px; font-weight: 700; }
-    .chip.p { background: #fef3c7; color: #92400e; } .chip.a { background: #dcfce7; color: #166534; } .chip.d { background: #fee2e2; color: #991b1b; }
+    .cam-hint { text-align: center; color: var(--sub); font-size: 11.5px; margin-top: 10px; }
+    .btns { display: flex; gap: 12px; margin-top: 14px; }
+    .btns button { height: 84px; font-size: 18px; border-radius: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; letter-spacing: .5px; }
+    .btns button small { font-size: 11px; font-weight: 600; opacity: .8; letter-spacing: 0; }
+    .in { background: linear-gradient(135deg, var(--pink2), var(--pink)); box-shadow: 0 8px 22px rgba(245,31,111,.35); }
+    .out { background: linear-gradient(135deg, #34343c, var(--ink)); box-shadow: 0 8px 22px rgba(17,17,20,.25); }
+    .finish { display: none; width: 100%; margin-top: 12px; padding: 16px 0; font-size: 16px; background: var(--green); }
+    .install { display: none; width: 100%; margin-top: 14px; padding: 12px 0; font-size: 15px; background: var(--pinkbg); color: var(--pink); }
+    .ioshint { display: none; font-size: 12px; color: var(--sub); text-align: center; margin-top: 10px; }
+    .msg { margin-top: 14px; padding: 14px; border-radius: 14px; font-size: 15px; text-align: center; display: none; }
+    .msg.ok { display: block; background: #e8f9ee; color: #14532d; }
+    .msg.err { display: block; background: #ffe9ee; color: #881337; }
+    .spin { display: none; text-align: center; margin-top: 16px; color: var(--pink); font-weight: 700; }
+    .snotice { margin-top: 14px; padding: 12px 14px; border-radius: 16px; background: var(--pinkbg); color: #9d174d; font-size: 14px; font-weight: 600; line-height: 1.4; }
+    /* result pop-up */
+    .result { position: fixed; inset: 0; background: rgba(17,17,20,.55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 60; padding: 24px; }
+    .result .box { background: #fff; border-radius: 26px; padding: 28px 22px 20px; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+    .result .icon { font-size: 56px; }
+    .result .big { font-size: 28px; font-weight: 800; margin: 6px 0 10px; }
+    .result.ok .big { color: var(--green); } .result.bad .big { color: var(--red); }
+    .result .detail { font-size: 15px; color: #333; margin-bottom: 8px; line-height: 1.4; }
+    .result .again { font-size: 15px; font-weight: 700; color: var(--red); margin-bottom: 8px; }
+    .result button { margin-top: 10px; width: 100%; padding: 15px; font-size: 17px; border-radius: 16px; background: var(--ink); }
+    /* tabs */
+    .tab { display: none; animation: fade .18s ease; }
+    .tab.on { display: block; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; justify-content: center; background: rgba(255,255,255,.92); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--line); padding: 6px 6px max(14px, env(safe-area-inset-bottom)); }
+    .tabbar .in2 { display: flex; width: 100%; max-width: 440px; }
+    .tabbar button { flex: 1; background: none; color: #9a9aa6; padding: 6px 0 2px; font-size: 10.5px; font-weight: 700; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
+    .tabbar button svg { width: 25px; height: 25px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .tabbar button.on { color: var(--pink); }
+    .tabbar .badge { position: absolute; top: 0; left: 55%; margin: 0; }
+    /* segmented buttons */
+    .slip-btns { display: flex; gap: 6px; margin-top: 12px; background: #f1f1f5; padding: 4px; border-radius: 14px; }
+    .slip-btns button { padding: 11px 0; font-size: 14px; background: #fff; color: var(--ink); border-radius: 11px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .sbtn { width: 100%; padding: 14px 0; font-size: 15px; background: var(--pink); border-radius: 14px; margin-top: 10px; }
+    .sbtn.green { background: var(--ink); } .sbtn.gray { background: #f1f1f5; color: var(--ink); }
+    /* time record / payslips */
+    .slip { margin-top: 14px; background: #fff; border-radius: 20px; padding: 16px; display: none; box-shadow: 0 6px 20px rgba(17,17,20,.05); }
+    .slip h3 { font-size: 17px; margin-bottom: 2px; }
+    .slip .sub { font-size: 12px; color: var(--sub); margin-bottom: 10px; }
+    .slip table, .pcard table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12.5px; margin-top: 6px; }
+    .slip th, .slip td, .pcard th, .pcard td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; }
+    .slip th, .pcard th { background: none; color: var(--sub); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+    .slip td.r, .slip th.r, .pcard td.r, .pcard th.r { text-align: right; }
+    .slip .totals { margin-top: 10px; font-size: 14px; }
+    .slip .totals div, .pcard .tl div { display: flex; justify-content: space-between; padding: 4px 0; }
+    .slip .gross, .pcard .gr { font-weight: 800; font-size: 17px; color: var(--pink); border-top: 1.5px solid var(--line); margin-top: 6px; padding-top: 10px !important; }
+    .slip .warn { color: var(--red); font-size: 12px; margin-top: 8px; }
+    .pcard { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 12px; background: #fff; }
+    .pcard .tl div { font-size: 13.5px; }
+    .chip { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .chip.p { background: #fff4d6; color: #8a5a00; } .chip.a { background: #e3f8ea; color: #166534; } .chip.d { background: #ffe4ea; color: #9f1239; }
+    .badge { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; line-height: 16px; text-align: center; }
     .rem { font-size: 9px; color: #b45309; white-space: normal; font-weight: 600; line-height: 1.2; margin-top: 2px; }
     td.rq { background: #fffbeb !important; }
-    .adm .subnav button { padding: 10px 0; font-size: 13px; background: #e2e8f0; color: #1e293b; border-radius: 10px; }
-    .adm .subnav button.on { background: #0f766e; color: #fff; }
-    .adm table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 8px; }
-    .adm th, .adm td { border: 1px solid #dde3ec; padding: 5px 6px; text-align: left; }
-    .adm th { background: #eef3fd; font-size: 11px; } .adm td.r, .adm th.r { text-align: right; }
-    .adm tr.tot td { font-weight: 800; background: #f0fdf4; color: #166534; }
-    .adm .grand { font-size: 17px; font-weight: 800; color: #16a34a; text-align: right; margin-top: 10px; }
-    .adm .note { font-size: 12px; color: #667; margin-top: 6px; }
-    .adm .amsg { margin-top: 10px; padding: 10px; border-radius: 10px; font-size: 13px; display: none; }
-    .adm .amsg.ok { display: block; background: #dcfce7; color: #14532d; } .adm .amsg.err { display: block; background: #fee2e2; color: #7f1d1d; }
-    .adm .del { padding: 4px 8px; font-size: 12px; background: #dc2626; border-radius: 8px; flex: 0; }
-    .adm h4 { font-size: 14px; margin-top: 12px; }
-    .wsched { margin-top: 14px; background: #fff; border-radius: 14px; padding: 12px; }
     .wsched .scroll, .adm .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .wsched table, .adm table.grid { border-collapse: collapse; font-size: 11px; min-width: 100%; }
-    .wsched th, .wsched td, .adm table.grid th, .adm table.grid td { border: 1px solid #dde3ec; padding: 4px 5px; text-align: center; white-space: nowrap; }
-    .wsched th, .adm table.grid th { background: #eef3fd; }
-    .wsched td.off { color: #b6bfcc; } .wsched td.on { color: #14532d; background: #f0fdf4; font-weight: 600; }
-    .wsched tr.today td { outline: 2px solid #1a73e8; outline-offset: -2px; }
-    .wsched td.dl, .adm table.grid td.dl { text-align: left; font-weight: 600; background: #f8fafc; }
+    .wsched table { border-collapse: collapse; font-size: 11px; min-width: 100%; margin-top: 10px; }
+    .wsched th, .wsched td { border: 1px solid var(--line); padding: 5px 6px; text-align: center; white-space: nowrap; }
+    .wsched th { background: #fafafc; color: var(--sub); }
+    .wsched td.off { color: #c4c4cc; } .wsched td.on { color: #14532d; background: #effaf2; font-weight: 600; }
+    .wsched tr.today td { outline: 2px solid var(--pink); outline-offset: -2px; }
+    .wsched td.dl { text-align: left; font-weight: 600; background: #fafafc; }
+    .wsched .note, .note { font-size: 12px; color: var(--sub); margin-top: 6px; }
+    .row2 { display: flex; gap: 8px; } .row2 > div { flex: 1; } .mini { font-size: 11px; color: var(--sub); margin: 8px 0 -4px 2px; font-weight: 600; }
+    /* admin (same layout, new colours) */
+    .adm { font-size: 14px; color: var(--ink); padding-top: 4px; }
+    .adm .card { padding: 16px; }
+    .adm input, .adm select { width: 100%; padding: 11px; font-size: 15px; border: 1.5px solid var(--line); border-radius: 12px; background: #fafafc; }
+    .adm .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .adm .row > * { flex: 1; }
+    .adm .row .lbl { flex: 0 0 52px; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--ink); font-size: 14px; margin: 0; }
+    .adm .btn { padding: 13px 0; font-size: 15px; background: var(--pink); border-radius: 14px; width: 100%; margin-top: 10px; }
+    .adm .btn.gray { background: #3f3f46; } .adm .btn.red { background: var(--red); } .adm .btn.green { background: var(--green); }
+    .adm .subnav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .adm .subnav button { flex: 1 1 30%; padding: 10px 0; font-size: 13px; background: #fff; color: var(--ink); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .adm .subnav button.on { background: var(--ink); color: #fff; }
+    .adm table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 8px; }
+    .adm th, .adm td { border: 1px solid var(--line); padding: 6px; text-align: left; }
+    .adm th { background: var(--pinkbg); font-size: 11px; } .adm td.r, .adm th.r { text-align: right; }
+    .adm tr.tot td { font-weight: 800; background: #f0fdf4; color: #166534; }
+    .adm .grand { font-size: 17px; font-weight: 800; color: var(--pink); text-align: right; margin-top: 10px; }
+    .adm .amsg { margin-top: 10px; padding: 10px; border-radius: 12px; font-size: 13px; display: none; }
+    .adm .amsg.ok { display: block; background: #e8f9ee; color: #14532d; } .adm .amsg.err { display: block; background: #ffe9ee; color: #881337; }
+    .adm .del { padding: 4px 8px; font-size: 12px; background: var(--red); border-radius: 8px; flex: 0; }
+    .adm h4 { font-size: 14px; margin-top: 14px; }
+    .adm table.grid { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+    .adm table.grid th, .adm table.grid td { border: 1px solid var(--line); padding: 4px 5px; text-align: center; white-space: nowrap; }
+    .adm table.grid th { background: var(--pinkbg); }
+    .adm table.grid td.dl { text-align: left; font-weight: 600; background: #fafafc; }
     .adm table.grid input { width: 92px; padding: 5px; font-size: 12px; border-radius: 6px; }
-    .adm table.grid input.bad { border-color: #dc2626; background: #fee2e2; }
+    .adm table.grid input.bad { border-color: var(--red); background: #ffe4ea; }
+
+    /* ===== DARK MODE (switched on for all phones from Admin) ===== */
+    html.dark { --ink: #f4f4f7; --sub: #9d9dab; --line: #2b2b34; --bg: #0b0b0e; --pinkbg: #3a0f22; }
+    html.dark body { background: var(--bg); color: var(--ink); }
+    html.dark .hdr { background: rgba(0,0,0,.92); border-bottom: 1px solid #1d1d24; }
+    html.dark .card, html.dark .wsched, html.dark .slip, html.dark .pcard { background: #17171c; box-shadow: none; border: 1px solid #22222a; }
+    html.dark select, html.dark #pin, html.dark .wsched input, html.dark .wsched select, html.dark .wsched textarea, html.dark .adm input, html.dark .adm select { background-color: #202027; border-color: #2e2e38; color: var(--ink); color-scheme: dark; }
+    html.dark select:focus, html.dark #pin:focus, html.dark .wsched input:focus, html.dark .wsched textarea:focus { background-color: #24242c; }
+    html.dark .loc { background: #1c1c22; box-shadow: none; color: #ff4d8d !important; font-weight: 600; border: 1px solid #3a0f22; }
+    html.dark #locstatus[style*="176, 0, 32"] { color: #ffc24d !important; background: #3a2a10; border-color: #5a4010; }
+    html.dark .cam-box { box-shadow: 0 0 0 4px #0b0b0e, 0 0 0 7px var(--pink), 0 10px 30px rgba(245,31,111,.35); }
+    html.dark .out { background: linear-gradient(135deg, #3a3a44, #26262d); border: 1px solid #44444f; box-shadow: none; }
+    html.dark .fpstatus.yes { background: #1d1e38; color: #c8caff; }
+    html.dark .fpstatus.no { background: #3a2a10; color: #ffd38f; }
+    html.dark .msg.ok { background: #10301c; color: #9cf0bb; }
+    html.dark .msg.err { background: #3b1219; color: #ff9aac; }
+    html.dark .snotice { color: #ff94bb; }
+    html.dark .install { color: #ff7aa9; }
+    html.dark .result .box { background: #1c1c22; }
+    html.dark .result .detail { color: #e4e4ea; }
+    html.dark .result button { background: var(--pink); }
+    html.dark .tabbar { background: rgba(14,14,18,.92); border-top-color: #22222a; }
+    html.dark .tabbar button { color: #777784; }
+    html.dark .slip-btns { background: #222229; }
+    html.dark .slip-btns button { background: #2f2f38; color: #fff; box-shadow: none; }
+    html.dark .sbtn.green { background: #f4f4f7; color: #111114; }
+    html.dark .sbtn.gray { background: #2a2a32; color: #fff; }
+    html.dark .reg { background: #f4f4f7; color: #111114; }
+    html.dark .chip.p { background: #3a2e10; color: #ffd38f; }
+    html.dark .chip.a { background: #10301c; color: #9cf0bb; }
+    html.dark .chip.d { background: #3b1219; color: #ff9aac; }
+    html.dark td[style*="fef2f2"] { background: #3b1219 !important; color: #ff7a8f !important; }
+    html.dark .wsched th, html.dark .wsched td.dl { background: #1f1f26; }
+    html.dark .wsched td.on { background: #12301d; color: #8ff0b0; }
+    html.dark .wsched td.off { color: #55555f; }
+    html.dark td.rq { background: #3a2e10 !important; }
+    html.dark .adm .subnav button { background: #1c1c22; color: #fff; box-shadow: none; }
+    html.dark .adm .subnav button.on { background: var(--pink); }
+    html.dark .adm th, html.dark .adm table.grid th { background: #2a1520; }
+    html.dark .adm table.grid td.dl { background: #1f1f26; }
+    html.dark .adm tr.tot td { background: #10301c; color: #9cf0bb; }
+    html.dark .adm .btn.gray { background: #34343d; }
+    html.dark .adm .amsg.ok { background: #10301c; color: #9cf0bb; }
+    html.dark .adm .amsg.err { background: #3b1219; color: #ff9aac; }
+    html.dark [style*="color:#667"], html.dark [style*="color: #667"] { color: #9d9dab !important; }
+
+    /* admin dark-mode switch */
+    .theme-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .theme-row .tt { font-weight: 800; font-size: 15px; } .theme-row .ts { font-size: 12px; color: var(--sub); margin-top: 2px; }
+    .switch { position: relative; width: 52px; height: 32px; flex: none; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch .sl { position: absolute; inset: 0; background: #d4d4dc; border-radius: 999px; transition: .2s; cursor: pointer; }
+    .switch .sl:before { content: ''; position: absolute; width: 26px; height: 26px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 2px 4px rgba(0,0,0,.25); }
+    .switch input:checked + .sl { background: var(--pink); }
+    .switch input:checked + .sl:before { transform: translateX(20px); }
+    html.dark .switch .sl { background: #3a3a44; }
+    html.dark .switch input:checked + .sl { background: var(--pink); }
   </style>
+  <script>try { if (localStorage.getItem("tcTheme") === "DARK") document.documentElement.classList.add("dark"); } catch (e) {}</script>
 </head>
 <body>
   <div class="app">
-    <div class="logo-clock" aria-label="clock">
-      <img src="clock-face.png" alt="">
-      <svg viewBox="0 0 100 100">
-        <g id="hHour"><line x1="50" y1="50" x2="50" y2="28" stroke="#111" stroke-width="5.5" stroke-linecap="round"/></g>
-        <g id="hMin"><line x1="50" y1="50" x2="50" y2="16" stroke="#111" stroke-width="4.2" stroke-linecap="round"/></g>
-        <g id="hSec"><line x1="50" y1="59" x2="50" y2="13" stroke="#ffd600" stroke-width="1.4" stroke-linecap="round"/></g>
-        <circle cx="50" cy="50" r="3.2" fill="#ffd600"/><circle cx="50" cy="50" r="1.2" fill="#111"/>
-      </svg>
-    </div>
-    <h1>Staff Timeclock</h1>
-    <button class="install" id="btnInstall" onclick="installApp()">📲 Install the Timeclock app</button>
-    <div class="ioshint" id="iosHint">📲 To install on iPhone: tap the Share button <b>⬆︎</b> then <b>Add to Home Screen</b>.</div>
-    <div class="clock" id="clock">--:--:--</div>
-    <div class="date" id="date"></div>
-    <div class="topnav"><button id="navStaff" class="on" onclick="showView('staff')">👤 Staff</button><button id="navAdmin" onclick="showView('admin')">🔐 Admin<span id="bdgAdmin"></span></button></div>
-    <div id="staffView">
-    <div id="locstatus" style="font-size:13px;text-align:center;margin:-8px 0 8px;color:#667">📍 Checking location…</div>
+    <header class="hdr">
+      <div class="logo-clock" aria-label="clock">
+        <img src="clock-face.png" alt="">
+        <svg viewBox="0 0 100 100">
+          <g id="hHour"><line x1="50" y1="50" x2="50" y2="28" stroke="#111" stroke-width="5.5" stroke-linecap="round"/></g>
+          <g id="hMin"><line x1="50" y1="50" x2="50" y2="16" stroke="#111" stroke-width="4.2" stroke-linecap="round"/></g>
+          <g id="hSec"><line x1="50" y1="59" x2="50" y2="13" stroke="#ffd600" stroke-width="1.4" stroke-linecap="round"/></g>
+          <circle cx="50" cy="50" r="3.2" fill="#ffd600"/><circle cx="50" cy="50" r="1.2" fill="#111"/>
+        </svg>
+      </div>
+      <div class="ttl"><div class="t1">Life Four Cuts</div><div class="t2">Staff Timeclock · Serin Tagaytay</div></div>
+      <button id="navStaff" class="pill on" onclick="showView('staff')">‹ Staff</button>
+      <button id="navAdmin" class="pill" onclick="showView('admin')">🔐 Admin<span id="bdgAdmin"></span></button>
+    </header>
 
-    <label for="staff">Who are you?</label>
-    <select id="staff"><option value="">Loading staff…</option></select>
-
-    <div class="fpstatus" id="fpstatus"></div>
-
-    <label for="pin">Access code (PIN)</label>
-    <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="For time record &amp; first-time setup">
-    <button class="reg" id="btnReg" onclick="registerFingerprint()">🔓 Register this phone (fingerprint / face / phone PIN)</button>
-
-    <div class="cam-box">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="canvas" style="display:none"></canvas>
-      <div class="cam-hint" id="camhint">Your selfie is captured when you punch</div>
-    </div>
-    <input type="file" id="file" accept="image/*" capture="user" style="display:none">
-
-    <div class="btns">
-      <button class="in" id="btnIn" onclick="punch('IN')" disabled>TIME IN</button>
-      <button class="out" id="btnOut" onclick="punch('OUT')" disabled>TIME OUT</button>
-    </div>
-    <button class="finish" id="btnFinish">🔓 Confirm it's you</button>
-
-    <div class="spin" id="spin">Working…</div>
-    <div class="msg" id="msg"></div>
     <div class="result" id="result" onclick="if(event.target===this)closeResult()"><div class="box">
       <div class="icon" id="resIcon"></div><div class="big" id="resTitle"></div>
       <div class="detail" id="resDetail"></div><div class="again" id="resAgain"></div>
       <button onclick="closeResult()">OK</button></div></div>
 
-    <div class="wsched">
-      <b>📅 Work Schedule</b>
-      <div class="slip-btns" style="margin-top:8px">
-        <button onclick="loadWorkSched('current')">This Cutoff</button>
-        <button onclick="loadWorkSched('next')">Next Cutoff</button>
+    <div id="staffView">
+      <div class="snotice" id="staffNotice" style="display:none"></div>
+
+      <!-- who-are-you card: moved into the open tab -->
+      <div class="card" id="idcard">
+        <label for="staff">Who are you?</label>
+        <select id="staff"><option value="">Loading staff…</option></select>
+        <div class="fpstatus" id="fpstatus"></div>
+        <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="Access code (PIN)">
+        <button class="reg" id="btnReg" onclick="registerFingerprint()">🔓 Register this phone (fingerprint / face / phone PIN)</button>
       </div>
-      <div id="wsOut" class="note" style="font-size:12px;color:#667;margin-top:8px">🔒 Enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.</div>
-    </div>
 
-    <div class="snotice" id="staffNotice" style="display:none"></div>
+      <section class="tab on" id="sHome">
+        <div class="hero">
+          <div class="clock" id="clock">--:--</div>
+          <div class="date" id="date"></div>
+          <div class="loc" id="locstatus">📍 Checking location…</div>
+        </div>
+        <div class="idslot"></div>
+        <div class="cam-box">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="canvas" style="display:none"></canvas>
+        </div>
+        <div class="cam-hint" id="camhint">Your selfie is taken when you tap TIME IN / OUT</div>
+        <input type="file" id="file" accept="image/*" capture="user" style="display:none">
+        <div class="btns">
+          <button class="in" id="btnIn" onclick="punch('IN')" disabled>TIME IN<small>start shift</small></button>
+          <button class="out" id="btnOut" onclick="punch('OUT')" disabled>TIME OUT<small>end shift</small></button>
+        </div>
+        <button class="finish" id="btnFinish">🔓 Confirm it's you</button>
+        <div class="spin" id="spin">Working…</div>
+        <div class="msg" id="msg"></div>
+        <button class="install" id="btnInstall" onclick="installApp()">📲 Install the Timeclock app</button>
+        <div class="ioshint" id="iosHint">📲 To install on iPhone: tap Share <b>⬆︎</b> then <b>Add to Home Screen</b>.</div>
+      </section>
 
-    <label>My Time Record</label>
-    <div class="slip-btns">
-      <button id="btnCur" onclick="viewSlip('current')" disabled>This Cutoff</button>
-      <button id="btnPrev" onclick="viewSlip('previous')" disabled>Last Cutoff</button>
-    </div>
-    <div class="slip" id="slip"></div>
+      <section class="tab" id="sRec">
+        <h1 class="big">Time Record</h1>
+        <div class="idslot"></div>
+        <div class="card">
+          <h2>🕒 My time in / out</h2>
+          <div class="hint">Enter your access code above, then pick a cutoff.</div>
+          <div class="slip-btns">
+            <button id="btnCur" onclick="viewSlip('current')" disabled>This cutoff</button>
+            <button id="btnPrev" onclick="viewSlip('previous')" disabled>Last cutoff</button>
+          </div>
+        </div>
+        <div class="slip" id="slip"></div>
+      </section>
 
-    <div class="wsched">
-      <b>💵 My Payslips<span id="bdgPay"></span></b>
-      <div style="font-size:12px;color:#667;margin-top:4px">Your payslip appears here once the admin has reviewed and released it (target: the 16th for the 1st–15th and the 1st for the 16th–end, by 12:00 noon). Check it and tap <b>Accept</b> so your salary can be processed.</div>
-      <button class="sbtn" onclick="loadMyPayslips()">View my payslips</button>
-      <div id="payslipsOut"></div>
-    </div>
+      <section class="tab" id="sPay">
+        <h1 class="big">Payslips</h1>
+        <div class="idslot"></div>
+        <div class="wsched">
+          <h2>💵 My payslips</h2>
+          <div class="hint">Your payslip appears here after the admin releases it (target: 12:00 noon on the 16th and the 1st). Check it and tap <b>Accept</b>.</div>
+          <button class="sbtn" onclick="loadMyPayslips()">View my payslips</button>
+          <div id="payslipsOut"></div>
+        </div>
+      </section>
 
-    <div class="wsched">
-      <b>📝 Requests<span id="bdgReq"></span></b>
-      <div style="font-size:12px;color:#667;margin-top:4px">Leave and Change of schedule must be filed at least 3 days before the date, otherwise they are automatically denied (only the admin can override). Sick leave can be filed anytime. If a request is denied for short notice, you can ask once for reconsideration.</div>
-      <select id="rqType" onchange="$('rqShiftRow').style.display = this.value === 'CHANGE' ? 'block' : 'none'">
-        <option value="">— Type of request —</option>
-        <option value="LEAVE">Leave</option>
-        <option value="SICK">Sick leave</option>
-        <option value="CHANGE">Change of schedule</option>
-      </select>
-      <div style="display:flex;gap:8px"><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">From</div><input type="date" id="rqFrom"></div><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">To</div><input type="date" id="rqTo"></div></div>
-      <div id="rqShiftRow" style="display:none"><input type="text" id="rqShift" placeholder="New shift you want, e.g. 12-8 or 12:00-20:00 (or OFF)"></div>
-      <select id="rqCat">
-        <option value="">— Reason for request —</option>
-        <option>Family matter</option>
-        <option>Medical / check-up</option>
-        <option>Illness</option>
-        <option>Personal errand</option>
-        <option>Emergency</option>
-        <option>Travel</option>
-        <option>School / exam</option>
-        <option>Others</option>
-      </select>
-      <textarea id="rqReason" rows="2" maxlength="250" placeholder="Details (e.g. what, where, why)"></textarea>
-      <button class="sbtn green" onclick="submitReqUI()">Send request</button>
-      <button class="sbtn gray" onclick="loadMyRequests()">My requests</button>
-      <div id="reqOut"></div>
-    </div>
+      <section class="tab" id="sReq">
+        <h1 class="big">Requests</h1>
+        <div class="idslot"></div>
+        <div class="wsched">
+          <h2>📝 New request</h2>
+          <div class="hint">Leave and Change of schedule must be filed at least 3 days ahead (otherwise automatically denied; only the admin can override). Sick leave can be filed anytime.</div>
+          <select id="rqType" onchange="$('rqShiftRow').style.display = this.value === 'CHANGE' ? 'block' : 'none'">
+            <option value="">— Type of request —</option>
+            <option value="LEAVE">Leave</option>
+            <option value="SICK">Sick leave</option>
+            <option value="CHANGE">Change of schedule</option>
+          </select>
+          <div class="row2"><div><div class="mini">From</div><input type="date" id="rqFrom"></div><div><div class="mini">To</div><input type="date" id="rqTo"></div></div>
+          <div id="rqShiftRow" style="display:none"><input type="text" id="rqShift" placeholder="New shift, e.g. 12-8 or 12:00-20:00 (or OFF)"></div>
+          <select id="rqCat">
+            <option value="">— Reason for request —</option>
+            <option>Family matter</option>
+            <option>Medical / check-up</option>
+            <option>Illness</option>
+            <option>Personal errand</option>
+            <option>Emergency</option>
+            <option>Travel</option>
+            <option>School / exam</option>
+            <option>Others</option>
+          </select>
+          <textarea id="rqReason" rows="2" maxlength="250" placeholder="Details (e.g. what, where, why)"></textarea>
+          <button class="sbtn green" onclick="submitReqUI()">Send request</button>
+        </div>
+        <div class="wsched">
+          <h2>📋 My requests</h2>
+          <button class="sbtn gray" onclick="loadMyRequests()">Show my requests</button>
+          <div id="reqOut"></div>
+        </div>
+      </section>
+
+      <section class="tab" id="sSch">
+        <h1 class="big">Schedule</h1>
+        <div class="idslot"></div>
+        <div class="wsched">
+          <h2>📅 Team work schedule</h2>
+          <div class="slip-btns">
+            <button onclick="loadWorkSched('current')">This cutoff</button>
+            <button onclick="loadWorkSched('next')">Next cutoff</button>
+          </div>
+          <div id="wsOut" class="note">🔒 Enter your access code above, then pick a cutoff.</div>
+        </div>
+      </section>
+
+      <nav class="tabbar"><div class="in2">
+        <button id="tbHome" class="on" onclick="showTab('Home')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Home</button>
+        <button id="tbRec" onclick="showTab('Rec')"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Records</button>
+        <button id="tbPay" onclick="showTab('Pay')"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v.01M18 15v.01"/></svg>Payslips<span id="bdgPay"></span></button>
+        <button id="tbReq" onclick="showTab('Req')"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>Requests<span id="bdgReq"></span></button>
+        <button id="tbSch" onclick="showTab('Sch')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Schedule</button>
+      </div></nav>
     </div>
 
     <div id="adminView" class="adm" style="display:none">
@@ -228,6 +355,7 @@
         <div class="amsg" id="admLockMsg"></div>
       </div>
       <div id="admPanel" style="display:none">
+        <div class="card"><div class="theme-row"><div><div class="tt">🌙 Dark mode</div><div class="ts">Turns every staff phone dark (they switch when they next open or refresh the app).</div></div><label class="switch"><input type="checkbox" id="darkToggle" onchange="setThemeUI(this.checked)"><span class="sl"></span></label></div><div class="amsg" id="themeMsg"></div></div>
         <div class="subnav">
           <button id="subPay" class="on" onclick="adminTab('pay')">💰 Pay</button>
           <button id="subSched" onclick="adminTab('sched')">🗓 Schedule</button>
@@ -384,7 +512,7 @@
       $('hHour').setAttribute('transform', 'rotate(' + (hs * 30 + ms * 0.5) + ' 50 50)');
       $('hMin').setAttribute('transform', 'rotate(' + (ms * 6 + ss * 0.1) + ' 50 50)');
       $('hSec').setAttribute('transform', 'rotate(' + (ss * 6) + ' 50 50)');
-      $('clock').textContent = n.toLocaleTimeString();
+      $('clock').textContent = n.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
       $('date').textContent = n.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
     setInterval(tick, 1000); tick();
@@ -403,7 +531,9 @@
         sel.appendChild(o);
       });
       if (keep && staffList.some(s => s.id === keep)) sel.value = keep;
+      else { try { const last = localStorage.getItem('tcLastStaff'); if (last && staffList.some(s => s.id === last && !s.temp && !s.payslipOnly)) sel.value = last; } catch (e) {} }
       onStaffChange(false);
+      try { pinVisibility(); } catch (e) {}
     }
     function cachedStaff() { try { const a = JSON.parse(localStorage.getItem('tcStaff') || 'null'); return Array.isArray(a) && a.length ? a : null; } catch (e) { return null; } }
     function loadStaff() {
@@ -433,6 +563,44 @@
     loadStaff();
 
     function notePhone(staffId, pin) { if (staffId && pin) api('notephone', { staffId: staffId, pin: pin }).catch(() => {}); }
+
+    // ---- bottom tabs (the "who are you" card moves into the open tab) ----
+    function showTab(t) {
+      ['Home', 'Rec', 'Pay', 'Req', 'Sch'].forEach(k => { $('s' + k).classList.toggle('on', k === t); $('tb' + k).classList.toggle('on', k === t); });
+      curTab = t;
+      const slot = $('s' + t).querySelector('.idslot'); if (slot) slot.appendChild($('idcard'));
+      try { pinVisibility(); } catch (e) {}
+      window.scrollTo(0, 0);
+    }
+    let curTab = 'Home';
+    function pinVisibility() {
+      const s = currentStaff();
+      $('pin').style.display = (curTab === 'Home' && s && s.fp && !s.temp && !s.payslipOnly) ? 'none' : '';
+    }
+    showTab((location.hash.match(/tab=(Home|Rec|Pay|Req|Sch)/) || [])[1] || 'Home');
+    // remember who uses this phone (regular staff only)
+    $('staff').addEventListener('change', () => {
+      try { const s = currentStaff(); if (s && !s.temp) localStorage.setItem('tcLastStaff', s.id); else if (!s) localStorage.removeItem('tcLastStaff'); } catch (e) {}
+      pinVisibility();
+    });
+
+    // ---- light / dark theme (store-wide, set by the admin) ----
+    function applyTheme(t) {
+      const dark = String(t).toUpperCase() === 'DARK';
+      document.documentElement.classList.toggle('dark', dark);
+      try { localStorage.setItem('tcTheme', dark ? 'DARK' : 'LIGHT'); } catch (e) {}
+      const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', dark ? '#000000' : '#f51f6f');
+      const cb = $('darkToggle'); if (cb) cb.checked = dark;
+    }
+    try { applyTheme(localStorage.getItem('tcTheme') || 'LIGHT'); } catch (e) {}
+    function setThemeUI(on) {
+      applyTheme(on ? 'DARK' : 'LIGHT');
+      amsg('themeMsg', 'Saving…', true);
+      adminCall('setTheme', { theme: on ? 'DARK' : 'LIGHT' }).then(r => {
+        amsg('themeMsg', r.message || (r.ok ? 'Saved.' : 'Not saved.'), r.ok);
+        if (!r.ok) applyTheme(on ? 'LIGHT' : 'DARK');
+      }).catch(e => { amsg('themeMsg', 'Connection error — NOT saved. ' + e.message, false); applyTheme(on ? 'LIGHT' : 'DARK'); });
+    }
     function currentStaff() { return staffList.find(s => s.id === $('staff').value) || null; }
 
     $('staff').addEventListener('change', () => onStaffChange(true));
@@ -465,7 +633,7 @@
       }
       if (s.fp) {
         st.className = 'fpstatus yes';
-        st.textContent = '🔓 Phone registered — tap TIME IN / TIME OUT, then unlock with your fingerprint, face, iris or phone PIN.';
+        st.textContent = '✅ Ready — tap TIME IN or TIME OUT, then unlock with your face, fingerprint or phone PIN.';
         $('btnReg').style.display = 'none';
         prefetchChallenge();
       } else {
@@ -809,7 +977,9 @@
       $('staffView').style.display = v === 'staff' ? 'block' : 'none';
       $('adminView').style.display = v === 'admin' ? 'block' : 'none';
       $('navStaff').className = v === 'staff' ? 'on' : '';
-      $('navAdmin').className = v === 'admin' ? 'on' : '';
+      $('navAdmin').className = 'pill' + (v === 'admin' ? ' on' : '');
+      $('navStaff').className = 'pill' + (v === 'staff' ? ' on' : '');
+      window.scrollTo(0, 0);
     }
     function amsg(id, text, ok) { const m = $(id); m.textContent = text; m.className = 'amsg ' + (ok ? 'ok' : 'err'); }
     function adminCall(op, data, ms) {
@@ -1035,6 +1205,7 @@
       const s = currentStaff();
       api('notices', { staffId: s ? s.id : '' }, 30000).then(n => {
         if (!n || !n.ok) return;
+        if (n.theme) applyTheme(n.theme);
         badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
         badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
         if (!s) { $('staffNotice').style.display = 'none'; badge('bdgPay', 0); badge('bdgReq', 0); return; }
