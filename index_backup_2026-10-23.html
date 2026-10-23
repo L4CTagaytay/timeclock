@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#f51f6f">
+  <title>Staff Timeclock</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Timeclock">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    body { background: #f0f4f8; min-height: 100vh; display: flex; justify-content: center; }
+    .app { width: 100%; max-width: 420px; padding: 20px 16px 40px; }
+    h1 { font-size: 22px; color: #1a2a3a; text-align: center; margin: 8px 0 2px; }
+    .logo-clock { position: relative; width: 84px; height: 84px; margin: 4px auto 0; border-radius: 20px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+    .logo-clock img, .logo-clock svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .install { display: none; margin: 8px auto 0; padding: 10px 16px; font-size: 14px; background: #f51f6f; border-radius: 12px; flex: none; width: 100%; }
+    .ioshint { display: none; font-size: 12px; color: #667; text-align: center; margin-top: 6px; }
+    .clock { text-align: center; font-size: 34px; font-weight: 700; color: #1a73e8; letter-spacing: 1px; }
+    .date { text-align: center; color: #667; font-size: 14px; margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #445; margin: 14px 0 6px; }
+    select, #pin { width: 100%; padding: 14px; font-size: 17px; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; }
+    #pin { letter-spacing: 4px; }
+    .fpstatus { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 14px; display: none; }
+    .fpstatus.yes { display: block; background: #e0f2fe; color: #075985; }
+    .fpstatus.no { display: block; background: #fef3c7; color: #78350f; }
+    .cam-box { margin-top: 14px; border-radius: 16px; overflow: hidden; background: #dde5ee; position: relative; aspect-ratio: 4/3; }
+    video, canvas { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
+    .cam-hint { position: absolute; bottom: 8px; left: 8px; right: 8px; text-align: center; color: #fff; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+    .btns { display: flex; gap: 12px; margin-top: 18px; }
+    button { flex: 1; padding: 18px 0; font-size: 18px; font-weight: 700; border: none; border-radius: 14px; color: #fff; cursor: pointer; }
+    button:disabled { opacity: .45; }
+    .in { background: #16a34a; }
+    .out { background: #dc2626; }
+    .reg { display: none; width: 100%; margin-top: 10px; padding: 14px 0; font-size: 15px; background: #7c3aed; }
+    .finish { display: none; width: 100%; margin-top: 12px; padding: 16px 0; font-size: 16px; background: #0f766e; }
+    .msg { margin-top: 16px; padding: 14px; border-radius: 12px; font-size: 15px; text-align: center; display: none; }
+    .msg.ok { display: block; background: #dcfce7; color: #14532d; }
+    .msg.err { display: block; background: #fee2e2; color: #7f1d1d; }
+    .result { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+    .result .box { background: #fff; border-radius: 18px; padding: 26px 20px; width: 100%; max-width: 360px; text-align: center; }
+    .result .big { font-size: 30px; font-weight: 800; margin: 6px 0 10px; }
+    .result.ok .big { color: #16a34a; } .result.bad .big { color: #dc2626; }
+    .result .icon { font-size: 54px; }
+    .result .detail { font-size: 15px; color: #334; margin-bottom: 8px; }
+    .result .again { font-size: 15px; font-weight: 700; color: #b91c1c; margin-bottom: 8px; }
+    .result button { margin-top: 10px; width: 100%; padding: 14px; font-size: 17px; border: 0; border-radius: 12px; color: #fff; background: #1a73e8; }
+    .spin { display: none; text-align: center; margin-top: 16px; color: #1a73e8; font-weight: 600; }
+    .slip-btns { display: flex; gap: 12px; }
+    .slip-btns button { padding: 12px 0; font-size: 14px; background: #1a73e8; }
+    .slip { margin-top: 14px; background: #fff; border-radius: 14px; padding: 14px; display: none; }
+    .slip h3 { font-size: 16px; color: #1a2a3a; margin-bottom: 2px; }
+    .slip .sub { font-size: 12px; color: #667; margin-bottom: 10px; }
+    .slip table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    .slip th, .slip td { border: 1px solid #dde3ec; padding: 5px 6px; text-align: left; }
+    .slip th { background: #eef3fd; font-size: 11px; }
+    .slip td.r, .slip th.r { text-align: right; }
+    .slip .totals { margin-top: 10px; font-size: 13px; }
+    .slip .totals div { display: flex; justify-content: space-between; padding: 3px 0; }
+    .slip .gross { font-weight: 800; font-size: 16px; color: #16a34a; border-top: 2px solid #dde3ec; margin-top: 4px; padding-top: 8px !important; }
+    .slip .warn { color: #b00020; font-size: 12px; margin-top: 8px; }
+    .topnav { display: flex; gap: 8px; margin-bottom: 10px; }
+    .topnav button { padding: 10px 0; font-size: 14px; background: #cbd5e1; color: #1e293b; border-radius: 10px; }
+    .topnav button.on { background: #1a73e8; color: #fff; }
+    .adm { font-size: 14px; color: #1a2a3a; }
+    .adm .card { background: #fff; border-radius: 14px; padding: 14px; margin-top: 12px; }
+    .adm input, .adm select { width: 100%; padding: 10px; font-size: 15px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+    .adm .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .adm .row > * { flex: 1; }
+    .adm .row .lbl { flex: 0 0 52px; font-weight: 700; }
+    .adm .btn { padding: 12px 0; font-size: 15px; background: #1a73e8; border-radius: 10px; width: 100%; margin-top: 10px; }
+    .adm .btn.gray { background: #64748b; } .adm .btn.red { background: #dc2626; } .adm .btn.green { background: #16a34a; }
+    .adm .subnav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .adm .subnav button { flex: 1 1 30%; }
+    .badge { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 9px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; line-height: 16px; text-align: center; }
+    .snotice { margin-top: 12px; padding: 12px; border-radius: 12px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-size: 14px; font-weight: 600; }
+    .wsched input, .wsched select, .wsched textarea { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; margin-top: 6px; font-family: inherit; }
+    .sbtn { width: 100%; padding: 12px 0; font-size: 14px; background: #1a73e8; border-radius: 10px; margin-top: 8px; }
+    .sbtn.green { background: #16a34a; } .sbtn.gray { background: #64748b; }
+    .pcard { border: 1px solid #dde3ec; border-radius: 12px; padding: 10px; margin-top: 10px; background: #fff; }
+    .pcard table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 6px; }
+    .pcard th, .pcard td { border: 1px solid #dde3ec; padding: 4px 6px; text-align: left; }
+    .pcard th { background: #eef3fd; } .pcard td.r, .pcard th.r { text-align: right; }
+    .pcard .tl div { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; }
+    .pcard .gr { font-weight: 800; color: #16a34a; font-size: 15px; border-top: 2px solid #dde3ec; margin-top: 4px; padding-top: 6px !important; }
+    .chip { display: inline-block; padding: 2px 8px; border-radius: 9px; font-size: 11px; font-weight: 700; }
+    .chip.p { background: #fef3c7; color: #92400e; } .chip.a { background: #dcfce7; color: #166534; } .chip.d { background: #fee2e2; color: #991b1b; }
+    .rem { font-size: 9px; color: #b45309; white-space: normal; font-weight: 600; line-height: 1.2; margin-top: 2px; }
+    td.rq { background: #fffbeb !important; }
+    .adm .subnav button { padding: 10px 0; font-size: 13px; background: #e2e8f0; color: #1e293b; border-radius: 10px; }
+    .adm .subnav button.on { background: #0f766e; color: #fff; }
+    .adm table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 8px; }
+    .adm th, .adm td { border: 1px solid #dde3ec; padding: 5px 6px; text-align: left; }
+    .adm th { background: #eef3fd; font-size: 11px; } .adm td.r, .adm th.r { text-align: right; }
+    .adm tr.tot td { font-weight: 800; background: #f0fdf4; color: #166534; }
+    .adm .grand { font-size: 17px; font-weight: 800; color: #16a34a; text-align: right; margin-top: 10px; }
+    .adm .note { font-size: 12px; color: #667; margin-top: 6px; }
+    .adm .amsg { margin-top: 10px; padding: 10px; border-radius: 10px; font-size: 13px; display: none; }
+    .adm .amsg.ok { display: block; background: #dcfce7; color: #14532d; } .adm .amsg.err { display: block; background: #fee2e2; color: #7f1d1d; }
+    .adm .del { padding: 4px 8px; font-size: 12px; background: #dc2626; border-radius: 8px; flex: 0; }
+    .adm h4 { font-size: 14px; margin-top: 12px; }
+    .wsched { margin-top: 14px; background: #fff; border-radius: 14px; padding: 12px; }
+    .wsched .scroll, .adm .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .wsched table, .adm table.grid { border-collapse: collapse; font-size: 11px; min-width: 100%; }
+    .wsched th, .wsched td, .adm table.grid th, .adm table.grid td { border: 1px solid #dde3ec; padding: 4px 5px; text-align: center; white-space: nowrap; }
+    .wsched th, .adm table.grid th { background: #eef3fd; }
+    .wsched td.off { color: #b6bfcc; } .wsched td.on { color: #14532d; background: #f0fdf4; font-weight: 600; }
+    .wsched tr.today td { outline: 2px solid #1a73e8; outline-offset: -2px; }
+    .wsched td.dl, .adm table.grid td.dl { text-align: left; font-weight: 600; background: #f8fafc; }
+    .adm table.grid input { width: 92px; padding: 5px; font-size: 12px; border-radius: 6px; }
+    .adm table.grid input.bad { border-color: #dc2626; background: #fee2e2; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="logo-clock" aria-label="clock">
+      <img src="clock-face.png" alt="">
+      <svg viewBox="0 0 100 100">
+        <g id="hHour"><line x1="50" y1="50" x2="50" y2="28" stroke="#111" stroke-width="5.5" stroke-linecap="round"/></g>
+        <g id="hMin"><line x1="50" y1="50" x2="50" y2="16" stroke="#111" stroke-width="4.2" stroke-linecap="round"/></g>
+        <g id="hSec"><line x1="50" y1="59" x2="50" y2="13" stroke="#ffd600" stroke-width="1.4" stroke-linecap="round"/></g>
+        <circle cx="50" cy="50" r="3.2" fill="#ffd600"/><circle cx="50" cy="50" r="1.2" fill="#111"/>
+      </svg>
+    </div>
+    <h1>Staff Timeclock</h1>
+    <button class="install" id="btnInstall" onclick="installApp()">📲 Install the Timeclock app</button>
+    <div class="ioshint" id="iosHint">📲 To install on iPhone: tap the Share button <b>⬆︎</b> then <b>Add to Home Screen</b>.</div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="date" id="date"></div>
+    <div class="topnav"><button id="navStaff" class="on" onclick="showView('staff')">👤 Staff</button><button id="navAdmin" onclick="showView('admin')">🔐 Admin<span id="bdgAdmin"></span></button></div>
+    <div id="staffView">
+    <div id="locstatus" style="font-size:13px;text-align:center;margin:-8px 0 8px;color:#667">📍 Checking location…</div>
+
+    <label for="staff">Who are you?</label>
+    <select id="staff"><option value="">Loading staff…</option></select>
+
+    <div class="fpstatus" id="fpstatus"></div>
+
+    <label for="pin">Access code (PIN)</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="For time record &amp; first-time setup">
+    <button class="reg" id="btnReg" onclick="registerFingerprint()">🔓 Register this phone (fingerprint / face / phone PIN)</button>
+
+    <div class="cam-box">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas" style="display:none"></canvas>
+      <div class="cam-hint" id="camhint">Your selfie is captured when you punch</div>
+    </div>
+    <input type="file" id="file" accept="image/*" capture="user" style="display:none">
+
+    <div class="btns">
+      <button class="in" id="btnIn" onclick="punch('IN')" disabled>TIME IN</button>
+      <button class="out" id="btnOut" onclick="punch('OUT')" disabled>TIME OUT</button>
+    </div>
+    <button class="finish" id="btnFinish">🔓 Confirm it's you</button>
+
+    <div class="spin" id="spin">Working…</div>
+    <div class="msg" id="msg"></div>
+    <div class="result" id="result" onclick="if(event.target===this)closeResult()"><div class="box">
+      <div class="icon" id="resIcon"></div><div class="big" id="resTitle"></div>
+      <div class="detail" id="resDetail"></div><div class="again" id="resAgain"></div>
+      <button onclick="closeResult()">OK</button></div></div>
+
+    <div class="wsched">
+      <b>📅 Work Schedule</b>
+      <div class="slip-btns" style="margin-top:8px">
+        <button onclick="loadWorkSched('current')">This Cutoff</button>
+        <button onclick="loadWorkSched('next')">Next Cutoff</button>
+      </div>
+      <div id="wsOut" class="note" style="font-size:12px;color:#667;margin-top:8px">🔒 Enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.</div>
+    </div>
+
+    <div class="snotice" id="staffNotice" style="display:none"></div>
+
+    <label>My Time Record</label>
+    <div class="slip-btns">
+      <button id="btnCur" onclick="viewSlip('current')" disabled>This Cutoff</button>
+      <button id="btnPrev" onclick="viewSlip('previous')" disabled>Last Cutoff</button>
+    </div>
+    <div class="slip" id="slip"></div>
+
+    <div class="wsched">
+      <b>💵 My Payslips<span id="bdgPay"></span></b>
+      <div style="font-size:12px;color:#667;margin-top:4px">Your payslip appears here once the admin has reviewed and released it (target: the 16th for the 1st–15th and the 1st for the 16th–end, by 12:00 noon). Check it and tap <b>Accept</b> so your salary can be processed.</div>
+      <button class="sbtn" onclick="loadMyPayslips()">View my payslips</button>
+      <div id="payslipsOut"></div>
+    </div>
+
+    <div class="wsched">
+      <b>📝 Requests<span id="bdgReq"></span></b>
+      <div style="font-size:12px;color:#667;margin-top:4px">Leave and Change of schedule must be filed at least 3 days before the date, otherwise they are automatically denied (only the admin can override). Sick leave can be filed anytime. If a request is denied for short notice, you can ask once for reconsideration.</div>
+      <select id="rqType" onchange="$('rqShiftRow').style.display = this.value === 'CHANGE' ? 'block' : 'none'">
+        <option value="">— Type of request —</option>
+        <option value="LEAVE">Leave</option>
+        <option value="SICK">Sick leave</option>
+        <option value="CHANGE">Change of schedule</option>
+      </select>
+      <div style="display:flex;gap:8px"><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">From</div><input type="date" id="rqFrom"></div><div style="flex:1"><div style="font-size:11px;color:#667;margin-top:6px">To</div><input type="date" id="rqTo"></div></div>
+      <div id="rqShiftRow" style="display:none"><input type="text" id="rqShift" placeholder="New shift you want, e.g. 12-8 or 12:00-20:00 (or OFF)"></div>
+      <select id="rqCat">
+        <option value="">— Reason for request —</option>
+        <option>Family matter</option>
+        <option>Medical / check-up</option>
+        <option>Illness</option>
+        <option>Personal errand</option>
+        <option>Emergency</option>
+        <option>Travel</option>
+        <option>School / exam</option>
+        <option>Others</option>
+      </select>
+      <textarea id="rqReason" rows="2" maxlength="250" placeholder="Details (e.g. what, where, why)"></textarea>
+      <button class="sbtn green" onclick="submitReqUI()">Send request</button>
+      <button class="sbtn gray" onclick="loadMyRequests()">My requests</button>
+      <div id="reqOut"></div>
+    </div>
+    </div>
+
+    <div id="adminView" class="adm" style="display:none">
+      <div class="card" id="admLock">
+        <b>Admin access</b>
+        <div class="note">Enter the admin access code to open the owner tools.</div>
+        <input id="admCode" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Admin access code" style="margin-top:8px">
+        <button class="btn" onclick="adminLogin()">Unlock</button>
+        <div class="amsg" id="admLockMsg"></div>
+      </div>
+      <div id="admPanel" style="display:none">
+        <div class="subnav">
+          <button id="subPay" class="on" onclick="adminTab('pay')">💰 Pay</button>
+          <button id="subSched" onclick="adminTab('sched')">🗓 Schedule</button>
+          <button id="subHours" onclick="adminTab('hours')">🕙 Hours</button>
+          <button id="subHol" onclick="adminTab('hol')">📅 Holidays</button>
+          <button id="subReq" onclick="adminTab('req')">📝 Requests<span id="bdgAReq"></span></button>
+          <button id="subPsl" onclick="adminTab('psl')">✅ Payslips<span id="bdgAPsl"></span></button>
+          <button id="subStaff" onclick="adminTab('staff')">👥 Staff</button>
+        </div>
+
+        <div class="card" id="tabPay">
+          <b>Gross pay per cutoff</b>
+          <div class="row"><input type="month" id="payMonth"><button class="btn" style="margin-top:0" onclick="loadSummary()">Show</button></div>
+          <div id="payOut" class="note">Pick a month and tap Show.</div>
+        </div>
+
+        <div class="card" id="tabSched" style="display:none">
+          <b>Staff work schedule (per cutoff)</b>
+          <div class="note">Only staff scheduled on a day can TIME IN / OUT that day (once a cutoff's schedule is saved). Each shift uses that person's own start/end for late and pay rules. Type shifts like <b>10-8</b>, <b>10:00-20:00</b> or <b>12pm-8pm</b>; leave blank = day off.</div>
+          <div class="row"><input type="month" id="schMonth"><select id="schHalf"><option value="1">1st (1–15)</option><option value="2">2nd (16–end)</option></select></div>
+          <button class="btn" onclick="loadAdminSched()">Load cutoff</button>
+          <div id="schBody" style="display:none">
+            <h4>Weekly pattern (default shifts)</h4>
+            <div class="scroll"><table class="grid" id="patTable"></table></div>
+            <div class="row"><button class="btn gray" style="margin-top:6px" onclick="savePatternsUI()">Save pattern</button><button class="btn" style="margin-top:6px" onclick="fillFromPattern()">Fill cutoff from pattern</button></div>
+            <h4 id="schTitle">Schedule</h4>
+            <div class="scroll"><table class="grid" id="schTable"></table></div>
+            <button class="btn green" onclick="saveAdminSched()">Save schedule</button>
+          </div>
+          <div class="amsg" id="schMsg"></div>
+        </div>
+
+        <div class="card" id="tabReq" style="display:none">
+          <b>Staff requests</b>
+          <div class="row"><select id="reqFilter" onchange="loadAdminRequests()"><option value="recent">Pending + last 14 days</option><option value="all">All</option></select></div>
+          <div id="aReqOut" class="note">Loading…</div>
+          <div class="amsg" id="aReqMsg"></div>
+        </div>
+
+        <div class="card" id="tabPsl" style="display:none">
+          <b>Payslip review &amp; release</b>
+          <div class="note">Review opens after store closing on the last day of each cutoff. Target: release by 12:00 noon on the 16th / 1st. <b>Nothing reaches staff until you tap Release.</b></div>
+          <div class="row"><select id="pslCut" onchange="loadAdminPayslips(this.value)"></select></div>
+          <div class="amsg" id="aPslMsg"></div>
+          <div id="aPslOut" class="note">Loading…</div>
+          <h4>Open review early</h4>
+          <div class="note">Only if you want to start reviewing the current cutoff before its last day ends.</div>
+          <div class="row"><select id="relCut"></select><button class="btn gray" style="margin-top:0" onclick="releaseNowUI()">Open review</button></div>
+        </div>
+
+        <div class="card" id="tabStaff" style="display:none">
+          <b>Staff</b>
+          <div class="note">Removing a staff member only deactivates them — their time records and payslips are kept. Temporary staff are switched off automatically after their last day.</div>
+          <div class="amsg" id="stMsg"></div>
+          <div id="stOut" class="note">Loading…</div>
+          <h4>Add staff</h4>
+          <div class="row"><select id="stType" onchange="stTypeChange()"><option value="REGULAR">Regular staff (hourly rate)</option><option value="TEMP">Temporary staff (fixed daily rate)</option></select></div>
+          <div class="row"><input type="text" id="stName" placeholder="Full name"></div>
+          <div class="row" id="stRegRow"><input type="number" id="stRate" min="0" step="0.01" inputmode="decimal" placeholder="Hourly rate (₱)"></div>
+          <div id="stTempRows" style="display:none">
+            <div class="row"><input type="number" id="stDaily" min="0" step="0.01" inputmode="decimal" placeholder="Fixed daily rate (₱ per day with IN and OUT)"></div>
+            <div class="row"><label style="font-size:12px;color:#556;flex:1">From<input type="date" id="stFrom"></label><label style="font-size:12px;color:#556;flex:1">To<input type="date" id="stTo"></label></div>
+            <div class="row"><select id="stHost"></select></div>
+            <div class="note">The temporary staff can only TIME IN / OUT on this regular staff member's phone (it works right away: the phone he first punches on is saved as that person's phone, and after that only that phone works). He must also be on the work schedule. No late deductions, overtime or holiday premium — pay = days with IN and OUT × daily rate.</div>
+          </div>
+          <button class="btn green" onclick="addStaffUI()">Add staff</button>
+          <div id="stNew"></div>
+        </div>
+
+        <div class="card" id="tabHours" style="display:none">
+          <b>Store operating hours</b>
+          <div class="note">Time in/out pay rules (late rounding, pay stops at closing) follow these hours. Changes apply to every staff member's computation right away.</div>
+          <div id="hoursRows"></div>
+          <button class="btn green" onclick="saveHours()">Save store hours</button>
+          <div class="amsg" id="hoursMsg"></div>
+        </div>
+
+        <div class="card" id="tabHol" style="display:none">
+          <b>Holidays</b>
+          <div class="row"><select id="holYear" onchange="loadHolidays()"></select></div>
+          <div id="holList" class="note">Loading…</div>
+          <h4>Add / update a holiday</h4>
+          <div class="row"><input type="date" id="holDate"></div>
+          <div class="row"><select id="holType"><option value="REGULAR">Regular holiday (200%)</option><option value="SPECIAL">Special non-working (130%)</option></select></div>
+          <div class="row"><input type="text" id="holName" placeholder="Name, e.g. Bonifacio Day"></div>
+          <button class="btn green" onclick="addHolidayUI()">Add holiday</button>
+          <div class="amsg" id="holMsg"></div>
+        </div>
+
+        <button class="btn gray" onclick="adminLogout()">🔒 Lock admin</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Connection to the payroll spreadsheet (Google Apps Script API) =====
+    const API = 'https://script.google.com/macros/s/AKfycbwJhZ_NMpRzYDLqIz524QzzHpVLjlYn1Sn1Rit7w1_KyWFhigqh3-Gm6k3aFL4cXiiI/exec';
+
+    let staffList = [];
+    let stream = null;
+    let chal = null;          // { staffId, challenge, credIds, at }
+    let pending = null;       // { type, assertion, pin } waiting for a selfie
+
+    const $ = id => document.getElementById(id);
+    // Phone id (stays on this phone) so the admin can assign a temporary staff to a regular staff member's phone
+    const DEVICE_ID = (function () {
+      try { let d = localStorage.getItem('tcDeviceId'); if (!d) { d = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('tcDeviceId', d); } return d; }
+      catch (e) { return ''; }
+    })();
+
+    // POST to the spreadsheet API with a timeout; the answer comes back as JSON
+    function apiOnce(action, data, timeoutMs) {
+      const ctrl = window.AbortController ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs || 25000) : null;
+      return fetch(API, {
+        method: 'POST', redirect: 'follow', cache: 'no-store', credentials: 'omit',
+        body: JSON.stringify(Object.assign({ action: action, device: DEVICE_ID }, data || {})),
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(r => r.text()).then(txt => {
+        if (timer) clearTimeout(timer);
+        try { return JSON.parse(txt); }
+        catch (e) { throw new Error('Unexpected reply from server (' + txt.slice(0, 60).replace(/\s+/g, ' ') + ')'); }
+      }).catch(e => {
+        if (timer) clearTimeout(timer);
+        throw new Error(e.name === 'AbortError' ? 'Server took too long to answer' : e.message);
+      });
+    }
+
+    // Google sometimes drops a reply ("Failed to fetch" / temporary page). Read-only requests are retried
+    // automatically; punches and phone registration are never sent twice.
+    function api(action, data, timeoutMs) {
+      const noRetry = action === 'punch' || action === 'register';
+      let tries = 0;
+      const attempt = () => apiOnce(action, data, timeoutMs).catch(e => {
+        tries++;
+        if (noRetry || tries >= 3 || !/Failed to fetch|Unexpected reply|NetworkError|Load failed|too long/i.test(e.message)) throw e;
+        return new Promise(r => setTimeout(r, 1200 * tries)).then(attempt);
+      });
+      return attempt();
+    }
+
+    // If a punch reply is lost, ask the server whether it was actually saved
+    function confirmPunch(staffId, type) {
+      return api('punchstatus', { staffId: staffId }, 30000).then(st => {
+        if (st && st.ok && st.type === type && st.ts && Math.abs((st.now || Date.now()) - st.ts) < 4 * 60 * 1000) return st;
+        return null;
+      }).catch(() => null);
+    }
+
+    // ---- clock ----
+    function tick() {
+      const n = new Date();
+      const hs = n.getHours() % 12, ms = n.getMinutes(), ss = n.getSeconds();
+      $('hHour').setAttribute('transform', 'rotate(' + (hs * 30 + ms * 0.5) + ' 50 50)');
+      $('hMin').setAttribute('transform', 'rotate(' + (ms * 6 + ss * 0.1) + ' 50 50)');
+      $('hSec').setAttribute('transform', 'rotate(' + (ss * 6) + ' 50 50)');
+      $('clock').textContent = n.toLocaleTimeString();
+      $('date').textContent = n.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    setInterval(tick, 1000); tick();
+
+    // ---- staff list ----
+    let loadTries = 0;
+    // Staff names are kept on this phone so the app opens instantly; the list is refreshed quietly in the background
+    function renderStaffOptions(list) {
+      staffList = list || [];
+      const sel = $('staff');
+      const keep = sel.value;
+      sel.innerHTML = '<option value="">— Select your name —</option>';
+      staffList.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id; o.textContent = s.name + (s.payslipOnly ? ' (temporary – payslip only)' : s.temp ? ' (temporary)' : '');
+        sel.appendChild(o);
+      });
+      if (keep && staffList.some(s => s.id === keep)) sel.value = keep;
+      onStaffChange(false);
+    }
+    function cachedStaff() { try { const a = JSON.parse(localStorage.getItem('tcStaff') || 'null'); return Array.isArray(a) && a.length ? a : null; } catch (e) { return null; } }
+    function loadStaff() {
+      loadTries++;
+      const st = $('fpstatus');
+      const cached = cachedStaff();
+      if (loadTries === 1 && cached && !staffList.length) renderStaffOptions(cached); // instant start
+      if (!staffList.length) {
+        st.className = 'fpstatus yes';
+        st.textContent = loadTries > 1 ? 'Connecting… (try ' + loadTries + ')' : 'Connecting to payroll…';
+      }
+      api('staff').then(res => {
+        if (!res || !res.ok) throw new Error((res && res.message) || 'Server error');
+        if (!$('staff').value) { st.className = 'fpstatus'; st.textContent = ''; }
+        const list = (res.staff || []).map(s => ({ id: s.id, name: s.name, fp: s.fp, temp: s.temp, payslipOnly: s.payslipOnly }));
+        try { localStorage.setItem('tcStaff', JSON.stringify(list)); } catch (e) {}
+        renderStaffOptions(list);
+      }).catch(e => {
+        if (loadTries < 3) { setTimeout(loadStaff, 2000); return; }
+        if (staffList.length) return; // names already shown from this phone; the next refresh will update them
+        $('staff').innerHTML = '<option value="">Could not load — tap Retry below</option>';
+        st.className = 'fpstatus no';
+        st.innerHTML = 'Could not reach the payroll server.<br><small>' + esc(e.message) + ' · ' + esc(navigator.userAgent.slice(0, 80)) + '</small><br>' +
+          '<button style="margin-top:8px;padding:10px 0;font-size:15px;background:#1a73e8" onclick="loadTries=0;loadStaff()">Retry</button>';
+      });
+    }
+    loadStaff();
+
+    function notePhone(staffId, pin) { if (staffId && pin) api('notephone', { staffId: staffId, pin: pin }).catch(() => {}); }
+    function currentStaff() { return staffList.find(s => s.id === $('staff').value) || null; }
+
+    $('staff').addEventListener('change', () => onStaffChange(true));
+    function onStaffChange(clear) {
+      const s = currentStaff();
+      if (clear) { $('pin').value = ''; $('slip').style.display = 'none'; $('msg').className = 'msg'; }
+      pending = null; $('btnFinish').style.display = 'none';
+      const has = !!s;
+      ['btnIn', 'btnOut', 'btnCur', 'btnPrev'].forEach(id => $(id).disabled = !has);
+      const st = $('fpstatus');
+      if (!s) { st.className = 'fpstatus'; $('btnReg').style.display = 'none'; return; }
+      if (!window.PublicKeyCredential) {
+        st.className = 'fpstatus no';
+        st.textContent = 'This browser does not support fingerprint. Please open this link in Chrome (Android) or Safari (iPhone).';
+        $('btnReg').style.display = 'none';
+        return;
+      }
+      if (s.payslipOnly) {
+        $('btnIn').disabled = true; $('btnOut').disabled = true;
+        st.className = 'fpstatus yes';
+        st.textContent = '🧾 Your temporary work period has ended. Enter your code, then open My Payslips to check and accept your final payslip.';
+        $('btnReg').style.display = 'none';
+        return;
+      }
+      if (s.temp) {
+        st.className = 'fpstatus yes';
+        st.textContent = '🕑 Temporary staff — enter your PIN, then tap TIME IN / TIME OUT. Works only on the phone the admin assigned to you.';
+        $('btnReg').style.display = 'none';
+        return;
+      }
+      if (s.fp) {
+        st.className = 'fpstatus yes';
+        st.textContent = '🔓 Phone registered — tap TIME IN / TIME OUT, then unlock with your fingerprint, face, iris or phone PIN.';
+        $('btnReg').style.display = 'none';
+        prefetchChallenge();
+      } else {
+        st.className = 'fpstatus no';
+        st.textContent = 'This phone is not set up yet. Enter your PIN, then tap “Register this phone”.';
+        $('btnReg').style.display = 'block';
+      }
+    }
+
+    // A fresh challenge is fetched in advance so the fingerprint prompt opens
+    // instantly when TIME IN / OUT is tapped (some phones require that).
+    function prefetchChallenge() {
+      const s = currentStaff();
+      if (!s || !s.fp) return;
+      api('challenge', { staffId: s.id }).then(res => {
+        if (res.ok) chal = { staffId: s.id, challenge: res.challenge, credIds: res.credIds, at: Date.now() };
+      });
+    }
+    setInterval(prefetchChallenge, 4 * 60 * 1000);
+
+    // ---- base64url helpers ----
+    function b64uToBuf(s) {
+      s = s.replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4) s += '=';
+      const bin = atob(s), out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    function bufToB64u(buf) {
+      const b = new Uint8Array(buf); let s = '';
+      for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+      return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function toHex(bytes) { return Array.from(bytes).map(x => ('0' + x.toString(16)).slice(-2)).join(''); }
+
+    // ---- fingerprint registration (one time per phone) ----
+    function registerFingerprint() {
+      const s = currentStaff();
+      const pin = $('pin').value.trim();
+      if (!s) return;
+      if (!pin) { showMsg('Enter your PIN first, then tap Register.', false); return; }
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      navigator.credentials.create({ publicKey: {
+        challenge: challenge,
+        rp: { id: location.hostname, name: 'Staff Timeclock' },
+        user: { id: new TextEncoder().encode(s.id), name: s.name, displayName: s.name },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+        attestation: 'none', timeout: 60000
+      } }).then(cred => {
+        const resp = cred.response;
+        if (!resp.getPublicKey || (resp.getPublicKeyAlgorithm && resp.getPublicKeyAlgorithm() !== -7)) {
+          throw new Error('This phone’s browser is too old for fingerprint. Please update Chrome/Safari.');
+        }
+        const spki = new Uint8Array(resp.getPublicKey());
+        const pt = spki.slice(spki.length - 65);
+        if (pt[0] !== 4) throw new Error('Unsupported fingerprint key.');
+        setBusy(true);
+        return api('register', { staffId: s.id, pin: pin, credId: bufToB64u(cred.rawId),
+          x: toHex(pt.slice(1, 33)), y: toHex(pt.slice(33, 65)) });
+      }).then(res => {
+        setBusy(false);
+        showMsg(res.message || (res.ok ? 'Registered.' : 'Registration failed.'), res.ok);
+        if (res.ok) { $('pin').value = ''; s.fp = true; onStaffChange(false); }
+      }).catch(e => {
+        setBusy(false);
+        showMsg(e.name === 'NotAllowedError' ? 'Fingerprint registration was cancelled.' : ('Could not register: ' + e.message), false);
+      });
+    }
+
+    // ---- camera ----
+    async function startCam() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        $('video').srcObject = stream;
+      } catch (e) {
+        $('camhint').textContent = 'Camera preview unavailable — your camera app will open for the selfie.';
+      }
+    }
+    startCam();
+
+    function captureSelfie() {
+      const video = $('video');
+      if (!stream || !video.videoWidth) return null;
+      const canvas = $('canvas');
+      canvas.width = 480;
+      canvas.height = Math.round(480 * video.videoHeight / video.videoWidth);
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.7);
+    }
+
+    function openCameraApp() { const fi = $('file'); fi.value = ''; fi.click(); }
+    $('file').addEventListener('change', function () {
+      const f = this.files && this.files[0];
+      if (!f || !pending) return;
+      const img = new Image();
+      img.onload = function () {
+        const canvas = $('canvas');
+        canvas.width = 480; canvas.height = Math.round(480 * img.height / img.width);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(img.src);
+        if (!pending) return;
+        pending.selfie = canvas.toDataURL('image/jpeg', 0.7);
+        continueAfterSelfie(false);
+      };
+      img.onerror = () => punchResult(false, 'Could not read the selfie photo.');
+      img.src = URL.createObjectURL(f);
+    });
+
+    // ---- punch: 1) selfie (while camera is live)  2) phone unlock  3) location  4) send ----
+    let punching = false;
+    // Wake the server up early: its first answer after a pause can fail, so a punch never goes first
+    function warmUp() { api('staff', {}, 40000).catch(() => {}); }
+    setInterval(warmUp, 240000);
+
+    function punch(type) {
+      const s = currentStaff();
+      if (!s || punching) return;
+      warmUp();
+      $('btnFinish').style.display = 'none';
+      if (!s.fp && !$('pin').value.trim()) { showMsg('Please enter your PIN (or register your phone first).', false); return; }
+      if (s.fp && (!chal || chal.staffId !== s.id || Date.now() - chal.at > 4 * 60 * 1000)) {
+        prefetchChallenge();
+        showMsg('Getting ready… please tap ' + (type === 'IN' ? 'TIME IN' : 'TIME OUT') + ' again in 2 seconds.', false);
+        return;
+      }
+      pending = { type: type, pin: s.fp ? '' : $('pin').value.trim(), assertion: null, selfie: captureSelfie() };
+      if (!pending.selfie) {
+        // No live camera preview on this phone: take the selfie with the camera app first
+        showMsg('Take your selfie…', true);
+        openCameraApp();
+        return;
+      }
+      continueAfterSelfie(true);
+    }
+
+    // viaTap = we are still inside the staff member's tap (needed by some phones for the unlock prompt)
+    function continueAfterSelfie(viaTap) {
+      const s = currentStaff();
+      if (!s || !pending) return;
+      if (!s.fp) { sendPunch(); return; }
+      if (!viaTap) {
+        const b = $('btnFinish');
+        b.textContent = '🔓 Confirm it’s you (fingerprint / face / phone PIN)';
+        b.onclick = () => { b.style.display = 'none'; verifyThenSend(); };
+        b.style.display = 'block';
+        showMsg('Selfie OK ✔ — now tap the green button below to confirm it’s you.', true);
+        return;
+      }
+      verifyThenSend();
+    }
+
+    function verifyThenSend() {
+      const s = currentStaff();
+      if (!s || !pending) return;
+      if (!chal || chal.staffId !== s.id || Date.now() - chal.at > 4 * 60 * 1000) {
+        prefetchChallenge();
+        $('btnFinish').style.display = 'block';
+        showMsg('Getting ready… tap the button again in 2 seconds.', false);
+        return;
+      }
+      const c = chal; chal = null;
+      navigator.credentials.get({ publicKey: {
+        challenge: b64uToBuf(c.challenge),
+        rpId: location.hostname,
+        allowCredentials: c.credIds.map(id => ({ type: 'public-key', id: b64uToBuf(id) })),
+        userVerification: 'required', timeout: 60000
+      } }).then(a => {
+        if (!pending) return;
+        pending.assertion = {
+          credId: bufToB64u(a.rawId),
+          clientDataJSON: bufToB64u(a.response.clientDataJSON),
+          authenticatorData: bufToB64u(a.response.authenticatorData),
+          signature: bufToB64u(a.response.signature)
+        };
+        sendPunch();
+      }).catch(e => {
+        pending = null;
+        prefetchChallenge();
+        punchResult(false, e.name === 'NotAllowedError' ? 'Phone unlock was cancelled or not recognized.' : ('Unlock error: ' + e.message));
+      });
+    }
+
+    function sendPunch() {
+      const s = currentStaff();
+      if (!s || !pending) return;
+      const p = pending; pending = null;
+      punching = true; setBusy(true);
+      $('spin').textContent = 'Getting your location…';
+      getLocation(loc => {
+        if (!loc) {
+          punching = false; setBusy(false); prefetchChallenge(); checkLocationStatus();
+          punchResult(false, '📍 Location is OFF or blocked. Turn on Location/GPS and allow location for this page.');
+          return;
+        }
+        $('spin').textContent = 'Recording your punch…';
+        api('punch', { staffId: s.id, type: p.type, selfie: p.selfie, loc: loc, pin: p.pin, assertion: p.assertion }, 60000)
+          .then(res => {
+            punching = false; setBusy(false);
+            punchResult(!!res.ok, res.message || (res.ok ? '' : 'The server did not accept the punch.'));
+            if (res.ok) $('pin').value = '';
+            if (res.finalPayslip) setTimeout(refreshNotices, 1500);
+            prefetchChallenge();
+          })
+          .catch(e => {
+            $('spin').textContent = 'Checking if your punch was saved…';
+            confirmPunch(s.id, p.type).then(st => {
+              punching = false; setBusy(false); prefetchChallenge();
+              if (st) { punchResult(true, s.name + ' clocked ' + p.type + ' at ' + st.time + '.'); $('pin').value = ''; }
+              else punchResult(false, /Failed to fetch|Unexpected reply|too long/i.test(e.message) ? 'The server did not answer. Please check your internet and try again.' : ('Error: ' + e.message));
+            });
+          });
+      });
+      // the unlock screen can stop the camera on some phones: restart it for next time
+      if (!stream || stream.getVideoTracks().every(t => t.readyState === 'ended')) startCam();
+    }
+
+    function getLocation(cb) {
+      if (!navigator.geolocation) return cb(null);
+      let done = false;
+      const finish = l => { if (!done) { done = true; cb(l); } };
+      navigator.geolocation.getCurrentPosition(
+        pos => finish({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) }),
+        () => finish(null),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+      setTimeout(() => finish(null), 16000);
+    }
+
+    // Shows whether location is on, and triggers the phone's "allow location" prompt early
+    function checkLocationStatus() {
+      const el = $('locstatus');
+      if (!navigator.geolocation) { el.textContent = '📍 This phone cannot share location.'; el.style.color = '#b00020'; return; }
+      navigator.geolocation.getCurrentPosition(
+        p => { el.textContent = '📍 Location ON (±' + Math.round(p.coords.accuracy) + ' m)'; el.style.color = '#166534'; },
+        () => { el.textContent = '📍 Location is OFF or blocked — turn it on to clock in'; el.style.color = '#b00020'; },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    }
+    checkLocationStatus();
+
+    function setBusy(b) {
+      $('spin').style.display = b ? 'block' : 'none';
+      ['btnIn', 'btnOut', 'btnReg'].forEach(id => $(id).disabled = b);
+      if (!b) { const has = !!currentStaff(); $('btnIn').disabled = !has; $('btnOut').disabled = !has; }
+    }
+
+    // Big pop-up after every TIME IN / TIME OUT attempt
+    function punchResult(ok, detail) {
+      const r = $('result');
+      r.className = 'result ' + (ok ? 'ok' : 'bad');
+      $('resIcon').textContent = ok ? '✅' : '❌';
+      $('resTitle').textContent = ok ? 'SUCCESSFUL!' : 'UNSUCCESSFUL!';
+      $('resDetail').textContent = detail || '';
+      $('resAgain').textContent = ok ? '' : 'Your time was NOT recorded. Please try again.';
+      r.style.display = 'flex';
+      try { if (navigator.vibrate) navigator.vibrate(ok ? 120 : [120, 80, 120]); } catch (e) {}
+      showMsg((ok ? 'SUCCESSFUL! ' : 'UNSUCCESSFUL! ') + (detail || '') + (ok ? '' : ' Please try again.'), ok);
+    }
+    function closeResult() { $('result').style.display = 'none'; }
+
+    function showMsg(text, ok) { const m = $('msg'); m.textContent = text; m.className = 'msg ' + (ok ? 'ok' : 'err'); }
+
+    // ---- payslip (PIN protected) ----
+    function viewSlip(which) {
+      const s = currentStaff();
+      if (!s) return;
+      const pin = $('pin').value.trim();
+      const el = $('slip');
+      el.style.display = 'block';
+      if (!pin) { el.innerHTML = '<div style="color:#b00020">Please enter your access code to view your time record.</div>'; return; }
+      el.innerHTML = '<div style="text-align:center;color:#1a73e8;font-weight:600">Loading…</div>';
+      api('payslip', { staffId: s.id, which: which, pin: pin })
+        .then(r => { if (r && r.ok && r.staffOnly && !s.temp) notePhone(s.id, pin); return r; })
+        .then(renderSlip)
+        .catch(e => { el.innerHTML = '<div style="color:#b00020">Error: ' + esc(e.message) + '</div>'; });
+    }
+
+    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    // red "late" cell (more than 1 minute after the scheduled start)
+    function lateMins(d) { if (d.late) return +d.late; const m = String(d.adj || '').match(/Late (\d+)m/); return m && +m[1] > 1 ? +m[1] : 0; }
+    function inCell(d) { const lm = lateMins(d); return '<td' + (lm ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.in) + (lm ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td>'; }
+    function renderSlip(p) {
+      const el = $('slip');
+      if (!p.ok) { el.innerHTML = '<div style="color:#b00020">' + esc(p.message || 'Could not load payslip.') + '</div>'; return; }
+      if (!p.days.length) {
+        el.innerHTML = '<h3>' + esc(p.name) + '</h3><div class="sub">' + esc(p.cutoff) + '</div><div>No punches recorded in this cutoff yet.</div>';
+        return;
+      }
+      if (p.staffOnly) {
+        let r2 = '', onShift = 0;
+        const nd = new Date(), todayStr = nd.getFullYear() + '-' + ('0' + (nd.getMonth() + 1)).slice(-2) + '-' + ('0' + nd.getDate()).slice(-2);
+        p.days.forEach(d => {
+          if (d.note && d.date === todayStr && d.in && d.in !== '—' && (!d.out || d.out === '—')) { d.note = ''; d.onShift = true; onShift++; }
+          r2 += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' + inCell(d) + '<td>' + esc(d.out) + '</td>' +
+            '<td class="r">' + (d.onShift ? '<span style="color:#1a73e8">on shift</span>' : d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : (d.hours || 0).toFixed(2)) + '</td></tr>';
+        });
+        el.innerHTML = '<h3>' + esc(p.name) + '</h3>' +
+          '<div class="sub">Cutoff: ' + esc(p.cutoff) + '</div>' +
+          '<table><tr><th>Date</th><th>Time In</th><th>Time Out</th><th class="r">Hours</th></tr>' + r2 + '</table>' +
+          '<div class="totals"><div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+          '<div><span>Regular hours</span><span>' + (p.regHours || 0).toFixed(2) + '</span></div>' +
+          (p.otHours ? '<div><span>Overtime hours</span><span>' + p.otHours.toFixed(2) + '</span></div>' : '') +
+          '<div class="gross"><span>TOTAL HOURS WORKED</span><span>' + (p.totalHours || 0).toFixed(2) + '</span></div></div>' +
+          '<div style="font-size:11px;color:#667;margin-top:6px">Hours counted for pay: after late rounding, store/shift closing time and the unpaid break.</div>' +
+          (p.incomplete - onShift > 0 ? '<div class="warn">' + (p.incomplete - onShift) + ' day(s) missing IN or OUT. Please tell the admin.</div>' : '');
+        $('pin').value = '';
+        return;
+      }
+      let rows = '';
+      p.days.forEach(d => {
+        rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' + inCell(d) + '<td>' + esc(d.out) + '</td>' +
+          '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td>' +
+          '<td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>';
+      });
+      let lines =
+        '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+        '<div><span>Regular: ' + p.regHours.toFixed(2) + ' h × ₱' + p.rate.toFixed(2) + '</span><span>₱' + p.regPay.toFixed(2) + '</span></div>' +
+        '<div><span>OT: ' + p.otHours.toFixed(2) + ' h × ₱' + p.rate.toFixed(2) + ' × ' + p.otMult + '</span><span>₱' + p.otPay.toFixed(2) + '</span></div>';
+      if (p.rhHours > 0) lines += '<div><span>Reg. holiday: ' + p.rhHours.toFixed(2) + ' h × ' + (p.rhMult * 100) + '%' + (p.rhOTHours > 0 ? ' (+' + p.rhOTHours.toFixed(2) + 'h OT)' : '') + '</span><span>₱' + p.rhPay.toFixed(2) + '</span></div>';
+      if (p.shHours > 0) lines += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%' + (p.shOTHours > 0 ? ' (+' + p.shOTHours.toFixed(2) + 'h OT)' : '') + '</span><span>₱' + p.shPay.toFixed(2) + '</span></div>';
+      if (p.unworkedRH > 0) lines += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>₱' + p.unworkedRHPay.toFixed(2) + '</span></div>';
+      lines += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>' +
+        '<div class="gross"><span>GROSS PAY</span><span>₱' + p.grossPay.toFixed(2) + '</span></div>';
+      if (p.temp) lines = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+        '<div><span>Fixed daily rate: ' + p.daysWorked + ' day(s) × ' + peso(p.dailyRate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
+        '<div class="gross"><span>GROSS PAY</span><span>₱' + p.grossPay.toFixed(2) + '</span></div>';
+      el.innerHTML = '<h3>' + esc(p.name) + '</h3>' +
+        '<div class="sub">Cutoff: ' + esc(p.cutoff) + ' &nbsp;•&nbsp; Rate: ' + (p.temp ? peso(p.dailyRate) + '/day (temporary)' : '₱' + p.rate.toFixed(2) + '/hr') + '</div>' +
+        '<table><tr><th>Date</th><th>In</th><th>Out</th><th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table>' +
+        (p.days.some(d => d.tag) ? '<div style="font-size:10px;color:#889;margin-top:3px">RH = regular holiday, SNH = special non-working</div>' : '') +
+        '<div class="totals">' + lines + '</div>' +
+        (p.incomplete ? '<div class="warn">' + p.incomplete + ' day(s) missing IN or OUT — not counted. Ask admin to fix TimeLog.</div>' : '');
+      $('pin').value = '';
+    }
+    // ===================== ADMIN TAB =====================
+    let adminCode = '';
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const DAY_FULL = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+    const peso = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function showView(v) {
+      $('staffView').style.display = v === 'staff' ? 'block' : 'none';
+      $('adminView').style.display = v === 'admin' ? 'block' : 'none';
+      $('navStaff').className = v === 'staff' ? 'on' : '';
+      $('navAdmin').className = v === 'admin' ? 'on' : '';
+    }
+    function amsg(id, text, ok) { const m = $(id); m.textContent = text; m.className = 'amsg ' + (ok ? 'ok' : 'err'); }
+    function adminCall(op, data, ms) {
+      const body = Object.assign({ op: op, code: adminCode }, data || {});
+      // Google sometimes answers the first request with a temporary web page: retry once
+      return api('admin', body, ms || 60000).catch(e => {
+        if (/Unexpected reply/.test(e.message)) return new Promise(res => setTimeout(res, 1500)).then(() => api('admin', body, ms || 60000));
+        throw e;
+      });
+    }
+    function adminLogin() {
+      const c = $('admCode').value.trim();
+      if (!c) return amsg('admLockMsg', 'Enter the admin access code.', false);
+      adminCode = c;
+      amsg('admLockMsg', 'Checking…', true);
+      adminCall('login').then(r => {
+        if (!r.ok) { adminCode = ''; return amsg('admLockMsg', r.message || 'Wrong code.', false); }
+        $('admCode').value = ''; $('admLockMsg').className = 'amsg';
+        $('admLock').style.display = 'none'; $('admPanel').style.display = 'block';
+        const now = new Date();
+        $('payMonth').value = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+        const ys = $('holYear'); ys.innerHTML = '';
+        for (let y = now.getFullYear() - 1; y <= now.getFullYear() + 1; y++) ys.innerHTML += '<option' + (y === now.getFullYear() ? ' selected' : '') + '>' + y + '</option>';
+        adminTab('pay'); loadSummary();
+      }).catch(e => { adminCode = ''; amsg('admLockMsg', 'Connection error: ' + e.message, false); });
+    }
+    function adminLogout() {
+      adminCode = '';
+      $('admPanel').style.display = 'none'; $('admLock').style.display = 'block';
+      $('payOut').innerHTML = 'Pick a month and tap Show.';
+    }
+    function adminTab(t) {
+      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl'], ['staff', 'tabStaff', 'subStaff']].forEach(x => {
+        $(x[1]).style.display = x[0] === t ? 'block' : 'none';
+        $(x[2]).className = x[0] === t ? 'on' : '';
+      });
+      if (t === 'hours') loadHours();
+      if (t === 'hol') loadHolidays();
+      if (t === 'req') loadAdminRequests();
+      if (t === 'psl') loadAdminPayslips();
+      if (t === 'staff') loadAdminStaff();
+      if (t === 'sched' && !$('schMonth').value) { const n = new Date(); $('schMonth').value = n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2); $('schHalf').value = n.getDate() <= 15 ? '1' : '2'; loadAdminSched(); }
+    }
+    function loadSummary() {
+      const m = $('payMonth').value;
+      $('payOut').innerHTML = '<div style="color:#1a73e8;font-weight:600">Computing gross pay… (may take up to 20 seconds)</div>';
+      adminCall('summary', { month: m }, 90000).then(r => {
+        if (!r.ok) { $('payOut').innerHTML = '<div style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        let h = '';
+        r.cutoffs.forEach(c => {
+          h += '<h4>' + esc(c.label) + ' &nbsp;<span style="font-weight:400;color:#667">' + esc(c.start) + ' to ' + esc(c.end) + '</span></h4>';
+          h += '<table><tr><th>Staff</th><th class="r">Days</th><th class="r">Hrs</th><th class="r">OT</th><th class="r">Gross</th></tr>';
+          if (!c.rows.length) h += '<tr><td colspan="5">No staff.</td></tr>';
+          c.rows.forEach(x => {
+            h += '<tr><td>' + esc(x.name) + (x.incomplete ? ' <span style="color:#b00020" title="missing punch">⚠</span>' : '') + '</td><td class="r">' + x.days + '</td><td class="r">' + (x.regHours + (x.holidayHours || 0)).toFixed(2) + '</td><td class="r">' + x.otHours.toFixed(2) + '</td><td class="r">' + peso(x.gross) + '</td></tr>';
+          });
+          h += '<tr class="tot"><td colspan="4">TOTAL ' + esc(c.label.split(' (')[0]) + '</td><td class="r">' + peso(c.total) + '</td></tr></table>';
+        });
+        h += '<div class="grand">MONTH TOTAL: ' + peso(r.monthTotal) + '</div>';
+        if (r.cutoffs.some(c => c.rows.some(x => x.incomplete))) h += '<div class="note">⚠ = a day with a missing TIME IN or OUT (not paid yet). If it is today, the staff member may still be on shift; otherwise fix it in the TimeLog.</div>';
+        $('payOut').innerHTML = h;
+      }).catch(e => { $('payOut').innerHTML = '<div style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function loadHours() {
+      $('hoursRows').innerHTML = '<div class="note">Loading…</div>';
+      adminCall('getHours').then(r => {
+        if (!r.ok) { $('hoursRows').innerHTML = '<div style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        let h = '<div class="row" style="font-size:12px;color:#667"><span class="lbl"></span><span>Opens</span><span>Closes</span></div>';
+        DAYS.forEach(d => {
+          const v = String(r.hours[d] || '10:00-20:00').split('-');
+          h += '<div class="row"><span class="lbl">' + d + '</span><input type="time" id="ho_' + d + '" value="' + v[0] + '"><input type="time" id="hc_' + d + '" value="' + v[1] + '"></div>';
+        });
+        $('hoursRows').innerHTML = h;
+      }).catch(e => { $('hoursRows').innerHTML = '<div style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function saveHours() {
+      const hours = {};
+      for (const d of DAYS) {
+        const o = $('ho_' + d).value, c = $('hc_' + d).value;
+        if (!o || !c) return amsg('hoursMsg', DAY_FULL[d] + ': enter both opening and closing time.', false);
+        if (c <= o) return amsg('hoursMsg', DAY_FULL[d] + ': closing time must be after opening time.', false);
+        hours[d] = o + '-' + c;
+      }
+      if (!confirm('Save these store hours? Pay computations for all staff will use the new hours.')) return;
+      amsg('hoursMsg', 'Saving…', true);
+      adminCall('setHours', { hours: hours }).then(r => {
+        amsg('hoursMsg', r.message || (r.ok ? 'Saved.' : 'Not saved.'), r.ok);
+        if (r.ok) loadHours();
+      }).catch(e => amsg('hoursMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function loadHolidays() {
+      const y = $('holYear').value;
+      $('holList').innerHTML = 'Loading…';
+      adminCall('holidays', { year: y }).then(r => {
+        if (!r.ok) { $('holList').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        if (!r.holidays.length) { $('holList').innerHTML = 'No holidays for ' + esc(y) + ' yet.'; return; }
+        let h = '<table><tr><th>Date</th><th>Type</th><th>Name</th><th></th></tr>';
+        r.holidays.forEach(x => {
+          h += '<tr><td>' + esc(x.date) + '</td><td>' + (x.type === 'REGULAR' ? '<b style="color:#b45309">Regular</b>' : 'Special') + '</td><td>' + esc(x.name) + '</td>' +
+            '<td><button class="del" onclick="deleteHolidayUI(\'' + x.date + '\')">Remove</button></td></tr>';
+        });
+        $('holList').innerHTML = h + '</table>';
+      }).catch(e => { $('holList').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function addHolidayUI() {
+      const d = $('holDate').value, t = $('holType').value, n = $('holName').value.trim();
+      if (!d) return amsg('holMsg', 'Pick the holiday date.', false);
+      amsg('holMsg', 'Saving…', true);
+      adminCall('addHoliday', { date: d, type: t, name: n }).then(r => {
+        amsg('holMsg', r.message, r.ok);
+        if (r.ok) { $('holDate').value = ''; $('holName').value = ''; $('holYear').value = d.slice(0, 4); loadHolidays(); }
+      }).catch(e => amsg('holMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function deleteHolidayUI(d) {
+      if (!confirm('Remove the holiday on ' + d + '? Pay for that day will be computed as a normal day.')) return;
+      amsg('holMsg', 'Removing…', true);
+      adminCall('deleteHoliday', { date: d }).then(r => { amsg('holMsg', r.message, r.ok); loadHolidays(); })
+        .catch(e => amsg('holMsg', 'Connection error — NOT removed. ' + e.message, false));
+    }
+    // ===================== WORK SCHEDULE =====================
+    const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    function dowOf(d) { return new Date(d + 'T12:00:00Z').getUTCDay(); }
+    function shortTime(hm) { let [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'p' : 'a'; h = ((h + 11) % 12) + 1; return h + (m ? ':' + ('0' + m).slice(-2) : '') + ap; }
+    function shortShift(v) { const p = v.split('-'); return shortTime(p[0]) + '–' + shortTime(p[1]); }
+    function firstName(n) { return String(n).split(' ')[0]; }
+    function loadWorkSched(which) {
+      const s = currentStaff(), pin = $('pin').value.trim();
+      if (!s || !pin) { $('wsOut').innerHTML = '<span style="color:#b00020">Pick your name and enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.</span>'; return; }
+      $('wsOut').innerHTML = 'Loading schedule…';
+      const go = () => api('schedule', { which: which || 'current', staffId: s.id, pin: pin }, 40000);
+      go().catch(e => /Unexpected reply/.test(e.message) ? new Promise(r => setTimeout(r, 1500)).then(go) : Promise.reject(e)).then(g => {
+        if (!g.ok) { $('wsOut').innerHTML = esc(g.message || 'Could not load schedule.'); return; }
+        let h = '<div style="margin-bottom:6px;color:#334">' + esc(g.label) + ': ' + esc(g.start) + ' to ' + esc(g.end) + '</div>';
+        if (!g.posted) { $('wsOut').innerHTML = h + '<div>No schedule posted for this cutoff yet.</div>'; return; }
+        h += '<div class="scroll"><table><tr><th>Date</th>' + g.staff.map(s => '<th>' + esc(firstName(s.name)) + '</th>').join('') + '</tr>';
+        g.dates.forEach(d => {
+          const c = g.cells[d] || {};
+          h += '<tr class="' + (d === g.today ? 'today' : '') + '"><td class="dl">' + WD[dowOf(d)] + ' ' + d.slice(5).replace('-', '/') + '</td>' +
+            g.staff.map(s => { const rm = ((g.remarks || {})[d] || {})[s.id]; const rh = rm ? '<div class="rem">' + esc(rm) + '</div>' : '';
+              return c[s.id] ? '<td class="on' + (rm ? ' rq' : '') + '">' + shortShift(c[s.id]) + rh + '</td>' : '<td class="off' + (rm ? ' rq' : '') + '">off' + rh + '</td>'; }).join('') + '</tr>';
+        });
+        $('wsOut').innerHTML = h + '</table></div>';
+      }).catch(e => { $('wsOut').innerHTML = 'Could not load schedule (' + esc(e.message) + ').'; });
+    }
+
+    // shift text -> 'HH:MM-HH:MM', '' (off) or null (invalid)
+    function normShift(s) {
+      s = String(s || '').trim().toLowerCase();
+      if (!s || s === 'off' || s === '-') return '';
+      const m = s.replace(/\s+/g, '').replace(/[–—to]+/g, '-').match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?-(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
+      if (!m) return null;
+      const cv = (h, mi, ap) => { h = +h; mi = +(mi || 0); if (ap) { ap = ap[0]; if (ap === 'p' && h < 12) h += 12; if (ap === 'a' && h === 12) h = 0; } return h * 60 + mi; };
+      let a = cv(m[1], m[2], m[3]), b = cv(m[4], m[5], m[6]);
+      if (!m[3] && !m[6] && a < 7 * 60) a += 12 * 60; // e.g. 1-9 = 1pm-9pm
+      if (!m[6] && b <= a && b < 12 * 60) b += 12 * 60;
+      if (a >= 1440 || b >= 1440 || b <= a) return null;
+      const f = x => ('0' + Math.floor(x / 60)).slice(-2) + ':' + ('0' + (x % 60)).slice(-2);
+      return f(a) + '-' + f(b);
+    }
+    let schGrid = null;
+    const PD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    function loadAdminSched() {
+      amsg('schMsg', 'Loading…', true);
+      adminCall('getSchedule', { month: $('schMonth').value, half: $('schHalf').value }).then(g => {
+        if (!g.ok) return amsg('schMsg', g.message, false);
+        schGrid = g; $('schMsg').className = 'amsg'; $('schBody').style.display = 'block';
+        let p = '<tr><th>Staff</th>' + PD.map(d => '<th>' + d + '</th>').join('') + '</tr>';
+        g.staff.forEach(s => {
+          const pt = g.patterns[s.id] || {};
+          p += '<tr><td class="dl">' + esc(firstName(s.name)) + '</td>' + PD.map(d => '<td><input data-p="' + s.id + '|' + d + '" value="' + (pt[d] || '') + '" placeholder="off" onchange="markCell(this)"></td>').join('') + '</tr>';
+        });
+        $('patTable').innerHTML = p;
+        $('schTitle').textContent = 'Schedule ' + g.start + ' to ' + g.end + (g.posted ? '' : ' (not posted yet)');
+        let h = '<tr><th>Date</th>' + g.staff.map(s => '<th>' + esc(firstName(s.name)) + '</th>').join('') + '</tr>';
+        g.dates.forEach(d => {
+          const c = g.cells[d] || {};
+          h += '<tr><td class="dl">' + WD[dowOf(d)] + ' ' + d.slice(5).replace('-', '/') + '</td>' + g.staff.map(s => { const rm = ((g.remarks || {})[d] || {})[s.id]; return '<td' + (rm ? ' class="rq"' : '') + '><input data-c="' + d + '|' + s.id + '" value="' + (c[s.id] || '') + '" placeholder="off" onchange="markCell(this)">' + (rm ? '<div class="rem">' + esc(rm) + '</div>' : '') + '</td>'; }).join('') + '</tr>';
+        });
+        $('schTable').innerHTML = h;
+      }).catch(e => amsg('schMsg', 'Connection error: ' + e.message, false));
+    }
+    function markCell(el) { const v = normShift(el.value); if (v === null) el.classList.add('bad'); else { el.classList.remove('bad'); el.value = v; } }
+    function readPatterns() {
+      const out = {}; let bad = null;
+      document.querySelectorAll('#patTable input').forEach(el => { const [id, d] = el.dataset.p.split('|'); const v = normShift(el.value); if (v === null) bad = bad || el; (out[id] = out[id] || {})[d] = v || ''; });
+      return bad ? null : out;
+    }
+    function savePatternsUI() {
+      const p = readPatterns(); if (!p) return amsg('schMsg', 'Fix the red pattern cells first (e.g. 10-8 or 10:00-20:00).', false);
+      amsg('schMsg', 'Saving pattern…', true);
+      adminCall('savePatterns', { patterns: p }).then(r => amsg('schMsg', r.message, r.ok)).catch(e => amsg('schMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function fillFromPattern() {
+      const p = readPatterns(); if (!p) return amsg('schMsg', 'Fix the red pattern cells first.', false);
+      if (!confirm('Fill every day of this cutoff from the weekly pattern? (Replaces what is in the grid now; nothing is saved until you tap Save schedule.)')) return;
+      document.querySelectorAll('#schTable input').forEach(el => { const [d, id] = el.dataset.c.split('|'); el.value = (p[id] || {})[PD[(dowOf(d) + 6) % 7]] || ''; el.classList.remove('bad'); });
+      amsg('schMsg', 'Grid filled from pattern. Adjust any day, then tap Save schedule.', true);
+    }
+    function saveAdminSched() {
+      const cells = {}; let bad = false, n = 0;
+      document.querySelectorAll('#schTable input').forEach(el => { const [d, id] = el.dataset.c.split('|'); const v = normShift(el.value); if (v === null) { bad = true; el.classList.add('bad'); } else if (v) { (cells[d] = cells[d] || {})[id] = v; n++; } });
+      if (bad) return amsg('schMsg', 'Fix the red cells first (e.g. 10-8, 10:00-20:00, 12pm-8pm).', false);
+      if (!confirm('Save ' + n + ' shifts for ' + schGrid.start + ' to ' + schGrid.end + '? Staff not scheduled on a day will NOT be able to time in that day.')) return;
+      amsg('schMsg', 'Saving schedule…', true);
+      adminCall('saveSchedule', { month: $('schMonth').value, half: $('schHalf').value, cells: cells }).then(r => {
+        amsg('schMsg', r.message, r.ok); if (r.ok) loadAdminSched();
+      }).catch(e => amsg('schMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    // hide the schedule again when another name is picked
+    $('staff').addEventListener('change', () => { $('wsOut').innerHTML = '🔒 Enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.'; });
+
+    // ===================== INSTALLABLE APP =====================
+    let installEvt = null;
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (!standalone) $('btnInstall').style.display = 'block'; });
+    window.addEventListener('appinstalled', () => { $('btnInstall').style.display = 'none'; installEvt = null; });
+    function installApp() { if (!installEvt) return; installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; $('btnInstall').style.display = 'none'; }); }
+    if (!standalone && /iphone|ipad|ipod/i.test(navigator.userAgent)) $('iosHint').style.display = 'block';
+    // ===================== NOTICES (badges) =====================
+    function badge(id, n) { const el = $(id); if (el) el.innerHTML = n > 0 ? '<span class="badge">' + n + '</span>' : ''; }
+    function refreshNotices() {
+      const s = currentStaff();
+      api('notices', { staffId: s ? s.id : '' }, 30000).then(n => {
+        if (!n || !n.ok) return;
+        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
+        badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
+        if (!s) { $('staffNotice').style.display = 'none'; badge('bdgPay', 0); badge('bdgReq', 0); return; }
+        badge('bdgPay', n.newPayslips || 0); badge('bdgReq', n.requestUpdates || 0);
+        const msgs = [];
+        if (n.newPayslips) msgs.push('🔔 Your payslip is ready. Please check and accept it under <b>My Payslips</b>.');
+        if (n.requestUpdates) msgs.push('🔔 The admin answered your request. Tap <b>My requests</b> to see it.');
+        $('staffNotice').innerHTML = msgs.join('<br>');
+        $('staffNotice').style.display = msgs.length ? 'block' : 'none';
+      }).catch(() => {});
+    }
+    $('staff').addEventListener('change', () => { $('payslipsOut').innerHTML = ''; $('reqOut').innerHTML = ''; refreshNotices(); });
+    setTimeout(refreshNotices, 2500);
+    setInterval(refreshNotices, 180000);
+
+    function needPin(outId) {
+      const s = currentStaff(), pin = $('pin').value.trim();
+      if (!s || !pin) { $(outId).innerHTML = '<div style="color:#b00020;font-size:13px;margin-top:8px">Pick your name and enter your access code (PIN) above first.</div>'; return null; }
+      return { s: s, pin: pin };
+    }
+
+
+    // ===================== ADMIN: STAFF =====================
+    let stList = [];
+    function stTypeChange() {
+      const temp = $('stType').value === 'TEMP';
+      $('stRegRow').style.display = temp ? 'none' : 'flex';
+      $('stTempRows').style.display = temp ? 'block' : 'none';
+    }
+    function hostOptions(sel) {
+      return '<option value="">— Uses the phone of (regular staff) —</option>' + stList.filter(x => x.active && x.type !== 'TEMP')
+        .map(x => '<option value="' + esc(x.id) + '"' + (x.id === sel ? ' selected' : '') + '>' + esc(x.name) + '' + '</option>').join('');
+    }
+    function loadAdminStaff() {
+      $('stOut').innerHTML = 'Loading…';
+      adminCall('staffList').then(r => {
+        if (!r.ok) { $('stOut').innerHTML = ''; return amsg('stMsg', r.message || 'Could not load staff.', false); }
+        stList = r.staff || []; renderAdminStaff();
+      }).catch(e => { $('stOut').innerHTML = ''; amsg('stMsg', 'Connection error: ' + e.message, false); });
+    }
+    function stCard(x) {
+      const temp = x.type === 'TEMP';
+      const info = temp
+        ? '<span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:11px">TEMPORARY</span> ' + peso(x.dailyRate) + '/day · ' + esc(x.from) + ' to ' + esc(x.to) + '<br>Uses ' + (x.hostName ? esc(x.hostName) + '’s phone' : '<b style="color:#b00020">no phone assigned</b>')
+        : peso(x.rate) + '/hr · Phone: ' + (x.hasPhone ? 'registered' : '<span style="color:#b45309">not registered</span>');
+      const b = (label, fn, cls) => '<button class="btn ' + (cls || 'gray') + '" style="margin:4px 4px 0 0;padding:6px 10px;width:auto;font-size:12px" onclick="' + fn + '">' + label + '</button>';
+      return '<div style="border:1px solid #e3e8ef;border-radius:10px;padding:8px 10px;margin:6px 0;' + (x.active ? '' : 'opacity:.6') + '">' +
+        '<b>' + esc(x.name) + '</b> <span style="color:#889;font-size:12px">' + esc(x.id) + '</span><div style="font-size:12px;color:#445;margin-top:2px">' + info + '</div>' +
+        '<div>' + (x.active
+          ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🔑 New code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
+          : b('Re-activate', "stSetActive('" + x.id + "',true)")) + '</div>' +
+        '<div id="stEd_' + esc(x.id) + '"></div></div>';
+    }
+    function renderAdminStaff() {
+      const act = stList.filter(x => x.active), ina = stList.filter(x => !x.active);
+      $('stOut').innerHTML = '<h4 style="margin-top:6px">Active (' + act.length + ')</h4>' + (act.map(stCard).join('') || '<div class="note">None.</div>') +
+        (ina.length ? '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">Removed / inactive (' + ina.length + ')</summary>' + ina.map(stCard).join('') + '</details>' : '');
+      $('stHost').innerHTML = hostOptions($('stHost').value);
+    }
+    function stEdit(id) {
+      const x = stList.find(v => v.id === id), box = $('stEd_' + id);
+      if (!x || !box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      const temp = x.type === 'TEMP';
+      box.innerHTML = '<div style="margin-top:6px;border-top:1px dashed #dde;padding-top:6px">' +
+        '<div class="row"><input type="text" id="seName_' + id + '" value="' + esc(x.name) + '" placeholder="Full name"></div>' +
+        (temp
+          ? '<div class="row"><input type="number" id="seDaily_' + id + '" value="' + x.dailyRate + '" step="0.01" placeholder="Daily rate"></div>' +
+            '<div class="row"><label style="font-size:12px;flex:1">From<input type="date" id="seFrom_' + id + '" value="' + esc(x.from) + '"></label><label style="font-size:12px;flex:1">To<input type="date" id="seTo_' + id + '" value="' + esc(x.to) + '"></label></div>' +
+            '<div class="row"><select id="seHost_' + id + '">' + hostOptions(x.host) + '</select></div>'
+          : '<div class="row"><input type="number" id="seRate_' + id + '" value="' + x.rate + '" step="0.01" placeholder="Hourly rate"></div>') +
+        '<button class="btn green" style="margin-top:4px" onclick="stSave(\'' + id + '\')">Save changes</button></div>';
+    }
+    function stSave(id) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      const d = { id: id, name: $('seName_' + id).value };
+      if (x.type === 'TEMP') { d.dailyRate = $('seDaily_' + id).value; d.from = $('seFrom_' + id).value; d.to = $('seTo_' + id).value; d.host = $('seHost_' + id).value; }
+      else d.rate = $('seRate_' + id).value;
+      amsg('stMsg', 'Saving…', true);
+      adminCall('updateStaff', d).then(r => { amsg('stMsg', r.message || (r.ok ? 'Saved.' : 'Not saved.'), r.ok); if (r.ok) { loadAdminStaff(); loadStaff(); } })
+        .catch(e => amsg('stMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function showNewCode(name, id, pin, title) {
+      $('stNew').innerHTML = '<div style="margin-top:10px;border:2px solid #16a34a;border-radius:10px;padding:10px;background:#f0fdf4">' +
+        '<b>' + esc(title) + '</b><br>' + esc(name) + ' (' + esc(id) + ')<div style="font-size:28px;letter-spacing:6px;font-weight:700;margin:6px 0">' + esc(pin) + '</div>' +
+        '<div style="font-size:12px;color:#445">Give this access code to the staff member now. It is shown only once (you can always make a new one).</div>' +
+        '<button class="btn gray" style="margin-top:6px" onclick="$(\'stNew\').innerHTML=\'\'">Done — hide code</button></div>';
+      $('stNew').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function addStaffUI() {
+      const temp = $('stType').value === 'TEMP';
+      const d = { type: temp ? 'TEMP' : 'REGULAR', name: $('stName').value };
+      if (temp) { d.dailyRate = $('stDaily').value; d.from = $('stFrom').value; d.to = $('stTo').value; d.host = $('stHost').value; }
+      else d.rate = $('stRate').value;
+      amsg('stMsg', 'Adding…', true);
+      adminCall('addStaff', d).then(r => {
+        amsg('stMsg', r.message || (r.ok ? 'Added.' : 'Not added.'), r.ok);
+        if (!r.ok) return;
+        showNewCode(d.name.trim(), r.id, r.pin, 'New staff added — access code (PIN):');
+        ['stName', 'stRate', 'stDaily', 'stFrom', 'stTo'].forEach(k => $(k).value = '');
+        loadAdminStaff(); loadStaff();
+      }).catch(e => amsg('stMsg', 'Connection error — check the list before trying again. ' + e.message, false));
+    }
+    function stResetPin(id) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!confirm('Make a new access code for ' + x.name + '? The old code will stop working.')) return;
+      adminCall('resetPin', { id: id }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) showNewCode(x.name, id, r.pin, 'New access code (PIN):'); })
+        .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
+    }
+    function stResetPhone(id) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!confirm('Clear ' + x.name + '’s registered phone? They will register their new phone with their access code. Temporary staff assigned to this person must wait until the new phone opens the app.')) return;
+      adminCall('resetPhone', { id: id }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) { loadAdminStaff(); loadStaff(); } })
+        .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
+    }
+    function stSetActive(id, active) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!active && !confirm('Remove ' + x.name + ' from the active staff? Their time records and payslips are kept and you can re-activate them later.')) return;
+      adminCall('setActive', { id: id, active: active }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) { loadAdminStaff(); loadStaff(); } })
+        .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
+    }
+
+    // ===================== STAFF PAYSLIPS =====================
+    function staffSlipHtml(p) {
+      let rows = '';
+      p.days.forEach(d => { const lm = lateMins(d); rows += '<tr><td' + (lm ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + (lm ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td><td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>'; });
+      let t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+        '<div><span>Regular: ' + p.regHours.toFixed(2) + ' h × ' + peso(p.rate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
+        '<div><span>OT: ' + p.otHours.toFixed(2) + ' h × ' + peso(p.rate) + ' × ' + p.otMult + '</span><span>' + peso(p.otPay) + '</span></div>';
+      if (p.rhHours > 0) t += '<div><span>Reg. holiday: ' + p.rhHours.toFixed(2) + ' h × ' + (p.rhMult * 100) + '%</span><span>' + peso(p.rhPay) + '</span></div>';
+      if (p.shHours > 0) t += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%</span><span>' + peso(p.shPay) + '</span></div>';
+      if (p.unworkedRH > 0) t += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>' + peso(p.unworkedRHPay) + '</span></div>';
+      t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>';
+      if (p.temp) t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div><div><span>Fixed daily rate: ' + p.daysWorked + ' day(s) × ' + peso(p.dailyRate) + '</span><span>' + peso(p.regPay) + '</span></div>';
+      (p.adjustments || []).forEach(a => { t += '<div><span>' + esc(a.label) + '</span><span>' + (a.amount < 0 ? '−' : '+') + peso(Math.abs(a.amount)) + '</span></div>'; });
+      t += '<div class="gr"><span>GROSS PAY</span><span>' + peso(p.grossPay) + '</span></div>';
+      return '<table><tr><th>Date</th><th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table><div class="tl" style="margin-top:6px">' + t + '</div>';
+    }
+    function loadMyPayslips() {
+      const a = needPin('payslipsOut'); if (!a) return;
+      $('payslipsOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
+      api('mypayslips', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (r && r.ok && !a.s.temp) notePhone(a.s.id, a.pin);
+        if (!r.ok) { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        if (!r.payslips.length) { $('payslipsOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No payslip released yet. You will get a 🔔 notice here once the admin releases it.</div>'; return; }
+        $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + (x.final ? 'Final payslip: ' + esc(x.period) : esc(x.start) + ' to ' + esc(x.end)) + '</b> ' +
+          (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip p">Waiting for your acceptance</span>') +
+          (x.slip ? staffSlipHtml(x.slip) : '') +
+          (x.status !== 'ACCEPTED' ? '<button class="sbtn green" onclick="acceptSlipUI(\'' + x.start + '\')">✅ I checked it — Accept payslip</button>' : '') + '</div>').join('');
+      }).catch(e => { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function acceptSlipUI(start) {
+      const a = needPin('payslipsOut'); if (!a) return;
+      if (!confirm('Accept your payslip for the cutoff starting ' + start + '? Your salary will then be processed.')) return;
+      api('acceptpayslip', { staffId: a.s.id, pin: a.pin, start: start }, 40000).then(r => {
+        alert(r.message || (r.ok ? 'Accepted.' : 'Not accepted.'));
+        if (r.ok && r.closed) {
+          // temporary staff: hide everything and remove his name from this phone
+          ['payslipsOut', 'reqOut'].forEach(k => { if ($(k)) $(k).innerHTML = ''; });
+          $('slip').innerHTML = ''; $('slip').style.display = 'none'; $('pin').value = ''; $('staff').value = '';
+          onStaffChange(true); loadStaff(); refreshNotices(); return;
+        }
+        if (r.ok) { loadMyPayslips(); refreshNotices(); }
+      }).catch(e => alert('Connection error — NOT accepted yet. Please try again. (' + e.message + ')'));
+    }
+
+    // ===================== STAFF REQUESTS =====================
+    // reason text "[Category] details || RECONSIDERATION: why" -> html
+    function reasonHtml(txt) {
+      const parts = String(txt || '').split(' || RECONSIDERATION: ');
+      const m = parts[0].match(/^\[([^\]]+)\]\s*(.*)$/);
+      let h = m ? '<b>' + esc(m[1]) + '</b> – ' + esc(m[2]) : esc(parts[0]);
+      if (parts[1]) h += '<div style="margin-top:3px;color:#1e40af"><b>Reconsideration:</b> ' + esc(parts[1]) + '</div>';
+      return h;
+    }
+    function canReconsider(x) { return x.status === 'DENIED' && /^Automatically denied/.test(x.note) && !/RECONSIDERATION:/.test(x.reason); }
+    function reconsiderUI(id) {
+      const a = needPin('reqOut'); if (!a) return;
+      const why = ($('rc_' + id) || {}).value || '';
+      if (!why.trim()) return alert('Please explain why you could not file at least 3 days ahead.');
+      api('reconsider', { staffId: a.s.id, pin: a.pin, id: id, reason: why.trim() }, 40000).then(r => {
+        alert((r.ok ? '✅ ' : '❌ ') + (r.message || '')); if (r.ok) { loadMyRequests(); refreshNotices(); }
+      }).catch(e => alert('Connection error — NOT sent. Please try again. (' + e.message + ')'));
+    }
+    function chipFor(st) { return st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
+    function submitReqUI() {
+      const a = needPin('reqOut'); if (!a) return;
+      const type = $('rqType').value, from = $('rqFrom').value, to = $('rqTo').value || $('rqFrom').value, reason = $('rqReason').value.trim();
+      if (!type) return alert('Pick the type of request.');
+      if (!from) return alert('Pick the date.');
+      if (to < from) return alert('"To" date must be on or after the "From" date.');
+      const cat = $('rqCat').value;
+      if (!cat) return alert('Pick the reason for your request.');
+      if (!reason) return alert('Please write a few details about your reason.');
+      let newShift = '';
+      if (type === 'CHANGE') {
+        const raw = $('rqShift').value.trim();
+        newShift = /^off$/i.test(raw) ? 'OFF' : normShift(raw);
+        if (!newShift) return alert('Enter the new shift you want, e.g. 12-8 or 12:00-20:00 (or OFF).');
+      }
+      $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
+      api('request', { staffId: a.s.id, pin: a.pin, type: type, from: from, to: to, newShift: newShift, reason: '[' + cat + '] ' + reason }, 40000).then(r => {
+        if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        alert(r.status === 'DENIED' ? '❌ ' + r.message : '✅ ' + r.message);
+        $('rqType').value = ''; $('rqCat').value = ''; $('rqFrom').value = ''; $('rqTo').value = ''; $('rqShift').value = ''; $('rqReason').value = ''; $('rqShiftRow').style.display = 'none';
+        loadMyRequests(); refreshNotices();
+      }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error — request NOT sent. Please try again. (' + esc(e.message) + ')</div>'; });
+    }
+    function loadMyRequests() {
+      const a = needPin('reqOut'); if (!a) return;
+      $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
+      api('myrequests', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        if (!r.requests.length) { $('reqOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No requests yet.</div>'; return; }
+        $('reqOut').innerHTML = r.requests.map(x => '<div class="pcard"><b>' + esc(x.typeLabel) + '</b> ' + chipFor(x.status) +
+          '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
+          '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;margin-top:4px"><b>Admin:</b> ' + esc(x.note) + '</div>' : '') +
+          (canReconsider(x) ? '<textarea id="rc_' + x.id + '" rows="2" maxlength="300" placeholder="Why could you not file at least 3 days ahead?"></textarea><button class="sbtn" onclick="reconsiderUI(\'' + x.id + '\')">🙏 Ask for reconsideration</button>' : '') +
+          '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Filed ' + esc(x.filedAt) + '</div></div>').join('');
+        refreshNotices();
+      }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+
+    // ===================== ADMIN: REQUESTS & PAYSLIPS =====================
+    function loadAdminRequests() {
+      $('aReqOut').innerHTML = 'Loading…';
+      adminCall('requests', { filter: $('reqFilter').value }).then(r => {
+        if (!r.ok) { $('aReqOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        if (!r.requests.length) { $('aReqOut').innerHTML = 'No requests.'; return; }
+        $('aReqOut').innerHTML = r.requests.map(x => {
+          const auto = x.status === 'DENIED' && /Automatically denied/.test(x.note);
+          const act = (x.status === 'PENDING' || auto) ? '<input id="an_' + x.id + '" placeholder="Note to staff (optional)" style="margin-top:6px">' +
+            '<div class="row"><button class="btn green" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', true)">' + (auto ? 'Override &amp; approve' : 'Approve') + '</button>' +
+            (x.status === 'PENDING' ? '<button class="btn red" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', false)">Deny</button>' : '') + '</div>' : '';
+          return '<div class="pcard"><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
+            '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
+            (/RECONSIDERATION:/.test(x.reason) && x.status === 'PENDING' ? ' <span class="chip p">Reconsideration – late request</span>' : '') +
+            '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '') +
+            '<div style="font-size:11px;color:#94a3b8">Filed ' + esc(x.filedAt) + (x.decidedAt ? ' • decided ' + esc(x.decidedAt) : '') + '</div>' + act + '</div>';
+        }).join('');
+      }).catch(e => { $('aReqOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function decideUI(id, approve) {
+      const note = ($('an_' + id) || {}).value || '';
+      if (!confirm((approve ? 'Approve' : 'Deny') + ' this request?' + (approve ? ' The schedule will be updated automatically.' : ''))) return;
+      amsg('aReqMsg', 'Saving…', true);
+      adminCall('decide', { id: id, approve: approve, note: note }).then(r => { amsg('aReqMsg', r.message, r.ok); loadAdminRequests(); refreshNotices(); })
+        .catch(e => amsg('aReqMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    let pslData = null;
+    function adminSlipHtml(r) {
+      const p = r.slip; if (!p) return '<div class="note">No data.</div>';
+      const full = !p.released;
+      let rows = '';
+      p.days.forEach(d => {
+        rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' +
+          (full ? (function () { const lm = (String(d.adj || '').match(/Late (\d+)m/) || [])[1]; const late = lm && +lm > 1;
+            return '<td' + (late ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.in || '') + (late ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td><td>' + esc(d.out || '') + '</td>'; })() : '') +
+          '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>';
+      });
+      let t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
+        '<div><span>Regular: ' + p.regHours.toFixed(2) + ' h × ' + peso(p.rate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
+        '<div><span>OT: ' + p.otHours.toFixed(2) + ' h × ' + peso(p.rate) + ' × ' + p.otMult + '</span><span>' + peso(p.otPay) + '</span></div>';
+      if (p.rhHours > 0) t += '<div><span>Reg. holiday: ' + p.rhHours.toFixed(2) + ' h × ' + (p.rhMult * 100) + '%</span><span>' + peso(p.rhPay) + '</span></div>';
+      if (p.shHours > 0) t += '<div><span>Spec. holiday: ' + p.shHours.toFixed(2) + ' h × ' + (p.shMult * 100) + '%</span><span>' + peso(p.shPay) + '</span></div>';
+      if (p.unworkedRH > 0) t += '<div><span>Unworked reg. holiday × ' + p.unworkedRH + '</span><span>' + peso(p.unworkedRHPay) + '</span></div>';
+      t += '<div><span>Late / undertime</span><span>' + p.lateMin + ' / ' + p.underMin + ' min</span></div>';
+      if (p.temp) t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div><div><span>Fixed daily rate (temporary): ' + p.daysWorked + ' day(s) × ' + peso(p.dailyRate) + '</span><span>' + peso(p.regPay) + '</span></div>';
+      t += '<div><span><b>Computed pay</b></span><span><b>' + peso(p.basePay != null ? p.basePay : p.grossPay) + '</b></span></div>';
+      (p.adjustments || []).forEach(a => { t += '<div><span>' + esc(a.label) + '</span><span>' + (a.amount < 0 ? '−' : '+') + peso(Math.abs(a.amount)) + '</span></div>'; });
+      t += '<div class="gr"><span>GROSS PAY</span><span>' + peso(p.finalGross) + '</span></div>';
+      return '<table><tr><th>Date</th>' + (full ? '<th>In</th><th>Out</th>' : '') + '<th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table>' +
+        (p.incomplete ? '<div style="color:#b00020;font-size:12px;margin-top:4px">⚠ ' + p.incomplete + ' day(s) with a missing IN or OUT — not paid. Fix the TimeLog, then reopen this payslip.</div>' : '') +
+        '<div class="tl" style="margin-top:6px">' + t + '</div>';
+    }
+    function adjEditorHtml(r) {
+      const adj = (r.adjustments || []).concat([{ label: '', amount: '' }]);
+      return '<div style="margin-top:8px;font-size:12px;font-weight:700">Adjustments (use minus for deductions)</div><div id="adj_' + r.staffId + '">' +
+        adj.map(a => '<div class="row" style="margin-top:4px"><input class="adjL" placeholder="e.g. Allowance" value="' + esc(a.label) + '" style="flex:2"><input class="adjA" type="number" step="0.01" placeholder="±₱" value="' + (a.amount === '' ? '' : a.amount) + '" style="flex:1"></div>').join('') +
+        '</div><div class="row"><button class="btn gray" style="margin-top:6px" onclick="addAdjRow(\'' + r.staffId + '\')">+ Line</button><button class="btn" style="margin-top:6px" onclick="saveAdjUI(\'' + r.staffId + '\')">Save adjustments</button></div>';
+    }
+    function addAdjRow(id) { $('adj_' + id).insertAdjacentHTML('beforeend', '<div class="row" style="margin-top:4px"><input class="adjL" placeholder="e.g. Allowance" style="flex:2"><input class="adjA" type="number" step="0.01" placeholder="±₱" style="flex:1"></div>'); }
+    function saveAdjUI(id) {
+      const lines = [...$('adj_' + id).querySelectorAll('.row')].map(rw => ({ label: rw.querySelector('.adjL').value.trim(), amount: rw.querySelector('.adjA').value })).filter(a => a.label || a.amount !== '');
+      for (const a of lines) { if (!a.label || !Number(a.amount)) return amsg('aPslMsg', 'Each adjustment needs a description and a non-zero amount.', false); a.amount = Number(a.amount); }
+      amsg('aPslMsg', 'Saving…', true);
+      adminCall('saveAdjust', { start: pslData.detail.start, staffId: id, adjustments: lines }).then(r => { amsg('aPslMsg', r.message, r.ok); if (r.ok) loadAdminPayslips(pslData.detail.start, id); })
+        .catch(e => amsg('aPslMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function releaseUI(ids) {
+      const d = pslData.detail, n = ids === 'all' ? d.rows.filter(r => r.status === 'DRAFT').length : 1;
+      if (!n) return amsg('aPslMsg', 'Nothing waiting for release.', false);
+      if (!confirm('Release ' + n + ' payslip(s) for ' + d.start + ' to ' + d.end + ' to staff now? They will be notified to check and accept.')) return;
+      amsg('aPslMsg', 'Releasing…', true);
+      adminCall('release', { start: d.start, ids: ids }, 90000).then(r => { amsg('aPslMsg', r.message, r.ok); loadAdminPayslips(d.start); refreshNotices(); })
+        .catch(e => amsg('aPslMsg', 'Connection error: ' + e.message, false));
+    }
+    function toggleSlip(id) { const el = $('ps_' + id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+    function loadAdminPayslips(start, openId) {
+      $('aPslOut').innerHTML = '<div style="color:#1a73e8;font-weight:600">Loading payslips… (about 5 seconds)</div>';
+      adminCall('payslipStatus', { markSeen: true, start: start || '' }, 90000).then(r => {
+        if (!r.ok) { $('aPslOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        pslData = r;
+        const cur = r.currentCutoff;
+        $('relCut').innerHTML = '<option value="' + cur.start + '">' + cur.start + ' to ' + cur.end + ' (current)</option>';
+        $('pslCut').innerHTML = r.cutoffs.length ? r.cutoffs.map(c => '<option value="' + c.start + '"' + (r.detail && c.start === r.detail.start ? ' selected' : '') + '>' + c.start + ' to ' + c.end + ' — ' + (c.drafts ? c.drafts + ' for review, ' : '') + c.accepted + '/' + c.total + ' accepted</option>').join('') : '<option>No payslips yet</option>';
+        if (!r.detail) { $('aPslOut').innerHTML = '<div style="margin-top:8px">No payslips yet. Next review opens <b>' + esc(r.nextReview) + '</b>.</div>'; refreshNotices(); return; }
+        const d = r.detail, drafts = d.rows.filter(x => x.status === 'DRAFT').length;
+        let h = '<div style="margin-top:6px">Target release: <b>' + esc(d.target) + '</b></div>';
+        if (drafts) h += '<button class="btn green" onclick="releaseUI(\'all\')">Release all ' + drafts + ' reviewed payslips</button>';
+        d.rows.forEach(x => {
+          const chip = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">' + (x.kind === 'TEMP-FINAL' ? 'Sent automatically' : 'Released') + ' – waiting for acceptance</span>';
+          const fin = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e">Temporary – final ' + esc(x.period) + '</span>' : '';
+          h += '<div class="pcard"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div><b>' + esc(x.name) + '</b> ' + chip + fin + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</div>' +
+            '<div style="font-weight:800;color:#16a34a">' + peso(x.slip ? x.slip.finalGross : 0) + '</div></div>' +
+            '<button class="btn gray" style="margin-top:6px;padding:8px 0" onclick="toggleSlip(\'' + x.staffId + '\')">View / hide payslip</button>' +
+            '<div id="ps_' + x.staffId + '" style="display:' + (openId === x.staffId ? 'block' : 'none') + '">' + adminSlipHtml(x) +
+            (x.status !== 'ACCEPTED' ? adjEditorHtml(x) : '') +
+            (x.status === 'DRAFT' ? '<button class="btn green" onclick="releaseUI([\'' + x.staffId + '\'])">Release to ' + esc(x.name.split(' ')[0]) + '</button>' : '') + '</div></div>';
+        });
+        $('aPslOut').innerHTML = h;
+        refreshNotices();
+      }).catch(e => { $('aPslOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function releaseNowUI() {
+      const st = $('relCut').value; if (!st) return;
+      if (!confirm('Open review now for the cutoff starting ' + st + '? (Staff will not see anything until you release.)')) return;
+      amsg('aPslMsg', 'Opening review…', true);
+      adminCall('releaseNow', { start: st }, 90000).then(r => { amsg('aPslMsg', r.message, r.ok); loadAdminPayslips(st); })
+        .catch(e => amsg('aPslMsg', 'Connection error: ' + e.message, false));
+    }
+
+  </script>
+</body>
+</html>
