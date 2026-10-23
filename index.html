@@ -391,27 +391,39 @@
 
     // ---- staff list ----
     let loadTries = 0;
+    // Staff names are kept on this phone so the app opens instantly; the list is refreshed quietly in the background
+    function renderStaffOptions(list) {
+      staffList = list || [];
+      const sel = $('staff');
+      const keep = sel.value;
+      sel.innerHTML = '<option value="">— Select your name —</option>';
+      staffList.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id; o.textContent = s.name + (s.payslipOnly ? ' (temporary – payslip only)' : s.temp ? ' (temporary)' : '');
+        sel.appendChild(o);
+      });
+      if (keep && staffList.some(s => s.id === keep)) sel.value = keep;
+      onStaffChange(false);
+    }
+    function cachedStaff() { try { const a = JSON.parse(localStorage.getItem('tcStaff') || 'null'); return Array.isArray(a) && a.length ? a : null; } catch (e) { return null; } }
     function loadStaff() {
       loadTries++;
       const st = $('fpstatus');
-      st.className = 'fpstatus yes';
-      st.textContent = loadTries > 1 ? 'Connecting… (try ' + loadTries + ')' : 'Connecting to payroll…';
+      const cached = cachedStaff();
+      if (loadTries === 1 && cached && !staffList.length) renderStaffOptions(cached); // instant start
+      if (!staffList.length) {
+        st.className = 'fpstatus yes';
+        st.textContent = loadTries > 1 ? 'Connecting… (try ' + loadTries + ')' : 'Connecting to payroll…';
+      }
       api('staff').then(res => {
         if (!res || !res.ok) throw new Error((res && res.message) || 'Server error');
-        st.className = 'fpstatus'; st.textContent = '';
-        staffList = res.staff || [];
-        const sel = $('staff');
-        const keep = sel.value;
-        sel.innerHTML = '<option value="">— Select your name —</option>';
-        staffList.forEach(s => {
-          const o = document.createElement('option');
-          o.value = s.id; o.textContent = s.name + (s.payslipOnly ? ' (temporary – payslip only)' : s.temp ? ' (temporary)' : '');
-          sel.appendChild(o);
-        });
-        if (keep) sel.value = keep;
-        onStaffChange(false);
+        if (!$('staff').value) { st.className = 'fpstatus'; st.textContent = ''; }
+        const list = (res.staff || []).map(s => ({ id: s.id, name: s.name, fp: s.fp, temp: s.temp, payslipOnly: s.payslipOnly }));
+        try { localStorage.setItem('tcStaff', JSON.stringify(list)); } catch (e) {}
+        renderStaffOptions(list);
       }).catch(e => {
         if (loadTries < 3) { setTimeout(loadStaff, 2000); return; }
+        if (staffList.length) return; // names already shown from this phone; the next refresh will update them
         $('staff').innerHTML = '<option value="">Could not load — tap Retry below</option>';
         st.className = 'fpstatus no';
         st.innerHTML = 'Could not reach the payroll server.<br><small>' + esc(e.message) + ' · ' + esc(navigator.userAgent.slice(0, 80)) + '</small><br>' +
@@ -1322,7 +1334,7 @@
     }
     function toggleSlip(id) { const el = $('ps_' + id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
     function loadAdminPayslips(start, openId) {
-      $('aPslOut').innerHTML = 'Loading…';
+      $('aPslOut').innerHTML = '<div style="color:#1a73e8;font-weight:600">Loading payslips… (about 5 seconds)</div>';
       adminCall('payslipStatus', { markSeen: true, start: start || '' }, 90000).then(r => {
         if (!r.ok) { $('aPslOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
         pslData = r;
