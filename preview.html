@@ -44,7 +44,7 @@
     .fpstatus { margin-top: 10px; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.35; display: none; }
     .fpstatus.yes { display: block; background: #f3f4ff; color: #3730a3; }
     .fpstatus.no { display: block; background: #fff7e6; color: #8a4b00; }
-    #tabHome #idcard { padding: 12px 14px; margin-top: 12px; } #tabHome #idcard label { display: none; }
+    #sHome #idcard { padding: 12px 14px; margin-top: 12px; } #sHome #idcard label { display: none; }
     .reg { display: none; width: 100%; margin-top: 10px; padding: 14px 0; font-size: 15px; background: var(--ink); }
     /* home */
     .hero { text-align: center; padding: 14px 0 0; }
@@ -182,7 +182,7 @@
         <button class="reg" id="btnReg" onclick="registerFingerprint()">🔓 Register this phone (fingerprint / face / phone PIN)</button>
       </div>
 
-      <section class="tab on" id="tabHome">
+      <section class="tab on" id="sHome">
         <div class="hero">
           <div class="clock" id="clock">--:--</div>
           <div class="date" id="date"></div>
@@ -206,7 +206,7 @@
         <div class="ioshint" id="iosHint">📲 To install on iPhone: tap Share <b>⬆︎</b> then <b>Add to Home Screen</b>.</div>
       </section>
 
-      <section class="tab" id="tabRec">
+      <section class="tab" id="sRec">
         <h1 class="big">Time Record</h1>
         <div class="idslot"></div>
         <div class="card">
@@ -220,7 +220,7 @@
         <div class="slip" id="slip"></div>
       </section>
 
-      <section class="tab" id="tabPay">
+      <section class="tab" id="sPay">
         <h1 class="big">Payslips</h1>
         <div class="idslot"></div>
         <div class="wsched">
@@ -231,7 +231,7 @@
         </div>
       </section>
 
-      <section class="tab" id="tabReq">
+      <section class="tab" id="sReq">
         <h1 class="big">Requests</h1>
         <div class="idslot"></div>
         <div class="wsched">
@@ -266,7 +266,7 @@
         </div>
       </section>
 
-      <section class="tab" id="tabSch">
+      <section class="tab" id="sSch">
         <h1 class="big">Schedule</h1>
         <div class="idslot"></div>
         <div class="wsched">
@@ -507,9 +507,9 @@
 
     // ---- bottom tabs (the "who are you" card moves into the open tab) ----
     function showTab(t) {
-      ['Home', 'Rec', 'Pay', 'Req', 'Sch'].forEach(k => { $('tab' + k).classList.toggle('on', k === t); $('tb' + k).classList.toggle('on', k === t); });
+      ['Home', 'Rec', 'Pay', 'Req', 'Sch'].forEach(k => { $('s' + k).classList.toggle('on', k === t); $('tb' + k).classList.toggle('on', k === t); });
       curTab = t;
-      const slot = $('tab' + t).querySelector('.idslot'); if (slot) slot.appendChild($('idcard'));
+      const slot = $('s' + t).querySelector('.idslot'); if (slot) slot.appendChild($('idcard'));
       try { pinVisibility(); } catch (e) {}
       window.scrollTo(0, 0);
     }
