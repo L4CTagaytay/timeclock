@@ -295,14 +295,17 @@
         <div class="wsched">
           <h2>📝 New request</h2>
           <div class="hint">Leave and Change of schedule must be filed at least 3 days ahead (otherwise automatically denied; only the admin can override). Sick leave can be filed anytime.</div>
-          <select id="rqType" onchange="$('rqShiftRow').style.display = this.value === 'CHANGE' ? 'block' : 'none'">
+          <select id="rqType" onchange="rqTypeChange()">
             <option value="">— Type of request —</option>
             <option value="LEAVE">Leave</option>
             <option value="SICK">Sick leave</option>
-            <option value="CHANGE">Change of schedule</option>
+            <option value="CHANGE">Change of schedule (shift time)</option>
+            <option value="SWAP">Swap duty day (move my duty to another day)</option>
           </select>
-          <div class="row2"><div><div class="mini">From</div><input type="date" id="rqFrom"></div><div><div class="mini">To</div><input type="date" id="rqTo"></div></div>
+          <div class="row2"><div><div class="mini" id="rqFromLbl">From</div><input type="date" id="rqFrom"></div><div><div class="mini" id="rqToLbl">To</div><input type="date" id="rqTo"></div></div>
           <div id="rqShiftRow" style="display:none"><input type="text" id="rqShift" placeholder="New shift, e.g. 12-8 or 12:00-20:00 (or OFF)"></div>
+          <div id="rqCoverRow" style="display:none"><div class="mini">Who will cover the day you leave? (optional)</div><select id="rqCover"></select>
+            <div class="hint" id="rqSwapHint">If someone covers, you take their duty on your new day and they take yours.</div></div>
           <select id="rqCat">
             <option value="">— Reason for request —</option>
             <option>Family matter</option>
@@ -1391,12 +1394,37 @@
       }).catch(e => alert('Connection error — NOT sent. Please try again. (' + e.message + ')'));
     }
     function chipFor(st) { return st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
+
+    // ---- request form: Swap duty day ----
+    function rqTypeChange() {
+      const t = $('rqType').value, swap = t === 'SWAP';
+      $('rqShiftRow').style.display = (t === 'CHANGE' || swap) ? 'block' : 'none';
+      $('rqCoverRow').style.display = swap ? 'block' : 'none';
+      $('rqFromLbl').textContent = swap ? 'Day I will NOT work' : 'From';
+      $('rqToLbl').textContent = swap ? 'Day I will work instead' : 'To';
+      $('rqShift').placeholder = swap ? 'Shift on the new day (blank = same shift / cover’s shift)' : 'New shift, e.g. 12-8 or 12:00-20:00 (or OFF)';
+      if (swap) {
+        const me = currentStaff();
+        $('rqCover').innerHTML = '<option value="">— No one / not needed —</option>' + staffList.filter(x => !x.temp && !x.payslipOnly && (!me || x.id !== me.id)).map(x => '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>').join('');
+      }
+    }
+    function reqWhen(x) {
+      if (x.type === 'SWAP') {
+        const sh = x.newShift ? ' (' + shortShift(x.newShift) + ')' : '';
+        if (x.mine === false) return '🔁 You cover <b>' + esc(x.name) + '</b> on ' + esc(x.from) + '; your ' + esc(x.to) + ' duty moves to ' + esc(String(x.name).split(' ')[0]) + '.';
+        return '🔁 OFF ' + esc(x.from) + ' → WORKS ' + esc(x.to) + sh + (x.coverName ? '<br>Cover: ' + esc(x.coverName) + ' works ' + esc(x.from) + ', off ' + esc(x.to) : '');
+      }
+      return esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '');
+    }
     function submitReqUI() {
       const a = needPin('reqOut'); if (!a) return;
       const type = $('rqType').value, from = $('rqFrom').value, to = $('rqTo').value || $('rqFrom').value, reason = $('rqReason').value.trim();
       if (!type) return alert('Pick the type of request.');
       if (!from) return alert('Pick the date.');
-      if (to < from) return alert('"To" date must be on or after the "From" date.');
+      if (type === 'SWAP') {
+        if (!$('rqTo').value) return alert('Pick the day you will work instead.');
+        if ($('rqTo').value === from) return alert('The two days must be different.');
+      } else if (to < from) return alert('"To" date must be on or after the "From" date. (To move your duty to another day, choose "Swap duty day".)');
       const cat = $('rqCat').value;
       if (!cat) return alert('Pick the reason for your request.');
       if (!reason) return alert('Please write a few details about your reason.');
@@ -1406,11 +1434,15 @@
         newShift = /^off$/i.test(raw) ? 'OFF' : normShift(raw);
         if (!newShift) return alert('Enter the new shift you want, e.g. 12-8 or 12:00-20:00 (or OFF).');
       }
+      if (type === 'SWAP' && $('rqShift').value.trim()) {
+        newShift = normShift($('rqShift').value.trim());
+        if (!newShift) return alert('Enter the shift for the new day, e.g. 10-9 or 10:00-21:00, or leave it blank.');
+      }
       $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
-      api('request', { staffId: a.s.id, pin: a.pin, type: type, from: from, to: to, newShift: newShift, reason: '[' + cat + '] ' + reason }, 40000).then(r => {
+      api('request', { staffId: a.s.id, pin: a.pin, type: type, from: from, to: to, newShift: newShift, cover: type === 'SWAP' ? $('rqCover').value : '', reason: '[' + cat + '] ' + reason }, 40000).then(r => {
         if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         alert(r.status === 'DENIED' ? '❌ ' + r.message : '✅ ' + r.message);
-        $('rqType').value = ''; $('rqCat').value = ''; $('rqFrom').value = ''; $('rqTo').value = ''; $('rqShift').value = ''; $('rqReason').value = ''; $('rqShiftRow').style.display = 'none';
+        $('rqType').value = ''; $('rqCat').value = ''; $('rqFrom').value = ''; $('rqTo').value = ''; $('rqShift').value = ''; $('rqReason').value = ''; rqTypeChange();
         loadMyRequests(); refreshNotices();
       }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error — request NOT sent. Please try again. (' + esc(e.message) + ')</div>'; });
     }
@@ -1421,7 +1453,7 @@
         if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         if (!r.requests.length) { $('reqOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No requests yet.</div>'; return; }
         $('reqOut').innerHTML = r.requests.map(x => '<div class="pcard"><b>' + esc(x.typeLabel) + '</b> ' + chipFor(x.status) +
-          '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
+          '<div style="font-size:13px;margin-top:4px">' + reqWhen(x) + '</div>' +
           '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;margin-top:4px"><b>Admin:</b> ' + esc(x.note) + '</div>' : '') +
           (canReconsider(x) ? '<textarea id="rc_' + x.id + '" rows="2" maxlength="300" placeholder="Why could you not file at least 3 days ahead?"></textarea><button class="sbtn" onclick="reconsiderUI(\'' + x.id + '\')">🙏 Ask for reconsideration</button>' : '') +
           '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Filed ' + esc(x.filedAt) + '</div></div>').join('');
@@ -1441,7 +1473,7 @@
             '<div class="row"><button class="btn green" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', true)">' + (auto ? 'Override &amp; approve' : 'Approve') + '</button>' +
             (x.status === 'PENDING' ? '<button class="btn red" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', false)">Deny</button>' : '') + '</div>' : '';
           return '<div class="pcard"><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
-            '<div style="font-size:13px;margin-top:4px">' + esc(x.from) + (x.to !== x.from ? ' to ' + esc(x.to) : '') + (x.newShift ? ' → ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) : '') + '</div>' +
+            '<div style="font-size:13px;margin-top:4px">' + reqWhen(x) + '</div>' +
             (/RECONSIDERATION:/.test(x.reason) && x.status === 'PENDING' ? ' <span class="chip p">Reconsideration – late request</span>' : '') +
             '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '') +
             '<div style="font-size:11px;color:#94a3b8">Filed ' + esc(x.filedAt) + (x.decidedAt ? ' • decided ' + esc(x.decidedAt) : '') + '</div>' + act + '</div>';
