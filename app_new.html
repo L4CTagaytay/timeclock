@@ -312,8 +312,8 @@
           <div id="rqCoverRow" style="display:none"><div class="mini">Who will cover the day you leave? (optional)</div><select id="rqCover"></select>
             <div class="hint" id="rqSwapHint">If someone covers, you take their duty on your new day and they take yours.</div></div>
           <div id="rqResignRow" style="display:none">
-            <div class="mini">Resignation letter (you can edit it)</div>
-            <textarea id="rqLetter" rows="10" maxlength="5000" oninput="this.dataset.auto=''"></textarea>
+            <div class="mini">Your resignation letter</div>
+            <textarea id="rqLetter" rows="10" maxlength="5000" placeholder="Write your resignation letter here (include your last working day and sign with your name)."></textarea>
             <div class="mini">Attach your signed letter (photo or PDF, optional, max 5 MB)</div>
             <input type="file" id="rqFile" accept="image/*,application/pdf">
             <div class="hint" id="rqNotice"></div>
@@ -1432,8 +1432,6 @@
     }
     function resignRefresh() {
       if ($('rqType').value !== 'RESIGN') return;
-      const L = $('rqLetter');
-      if (!L.value || L.dataset.auto === '1') { L.value = resignTemplate(); L.dataset.auto = '1'; }
       const last = $('rqTo').value;
       $('rqNotice').innerHTML = !last ? 'Pick your last working day.' : (daysDiff(todayISO(), last) < 30
         ? '<b style="color:#e11d48">⚠️ Less than 30 days notice</b> (' + daysDiff(todayISO(), last) + ' days). You can still send it; the admin will decide.'
@@ -1505,7 +1503,7 @@
       $('rqCoverRow').style.display = swap ? 'block' : 'none';
       $('rqFromLbl').textContent = swap ? 'Day I will NOT work' : 'From';
       $('rqToLbl').textContent = resign ? 'Last working day' : swap ? 'Day I will work instead' : 'To';
-      if (resign) { $('rqLetter').dataset.auto = $('rqLetter').value ? $('rqLetter').dataset.auto : '1'; resignRefresh(); }
+      if (resign) resignRefresh();
       $('rqShift').placeholder = swap ? 'Shift on the new day (blank = same shift / cover’s shift)' : 'New shift, e.g. 12-8 or 12:00-20:00 (or OFF)';
       if (swap) {
         const me = currentStaff();
