@@ -1415,7 +1415,7 @@
         alert((r.ok ? '✅ ' : '❌ ') + (r.message || '')); if (r.ok) { loadMyRequests(); refreshNotices(); }
       }).catch(e => alert('Connection error — NOT sent. Please try again. (' + e.message + ')'));
     }
-    function chipFor(st) { return st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
+    function chipFor(st) { return st === 'REHIRED' ? '<span class="chip a">Re-activated</span>' : st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
 
 
     // ---- resignation ----
