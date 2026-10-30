@@ -203,6 +203,9 @@
     .switch input:checked + .sl:before { transform: translateX(20px); }
     html.dark .switch .sl { background: #3a3a44; }
     html.dark .switch input:checked + .sl { background: var(--pink); }
+    .deact { position: fixed; inset: 0; z-index: 200; background: #0b0b0e; color: #fff; display: none; align-items: center; justify-content: center; padding: 32px; text-align: center; }
+    .deact .dic { font-size: 68px; } .deact .dt { font-size: 25px; font-weight: 800; margin: 12px 0 6px; } .deact .dn { font-size: 16px; color: #ff4d8d; font-weight: 700; }
+    .deact .ds { font-size: 14px; color: #c9c9d6; margin-top: 12px; line-height: 1.55; } .deact img { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 8px; }
   </style>
   <script>try { if (localStorage.getItem("tcTheme") === "DARK") document.documentElement.classList.add("dark"); } catch (e) {}</script>
 </head>
@@ -223,6 +226,7 @@
       <button id="navAdmin" class="pill" onclick="showView('admin')">🔐 Admin<span id="bdgAdmin"></span></button>
     </header>
 
+    <div class="deact" id="deact"><div><img src="clock-face.png" alt=""><div class="dic">🔒</div><div class="dt">This app has been deactivated</div><div class="dn" id="deactName"></div><div class="ds">Your access to the Life Four Cuts Staff Timeclock has ended.<br>Thank you for your service.</div><div class="ds" style="font-size:12px;color:#8a8a96">If you think this is a mistake, please contact the admin.</div></div></div>
     <div class="result" id="result" onclick="if(event.target===this)closeResult()"><div class="box">
       <div class="icon" id="resIcon"></div><div class="big" id="resTitle"></div>
       <div class="detail" id="resDetail"></div><div class="again" id="resAgain"></div>
@@ -472,6 +476,14 @@
 
     const $ = id => document.getElementById(id);
     // Phone id (stays on this phone) so the admin can assign a temporary staff to a regular staff member's phone
+    // ---- deactivated phone (resigned / terminated / end of service) ----
+    function applyDeact(d) {
+      try { if (d) localStorage.setItem('tcDeact', JSON.stringify(d)); else localStorage.removeItem('tcDeact'); } catch (e) {}
+      const el = document.getElementById('deact'); if (!el) return;
+      el.style.display = d ? 'flex' : 'none';
+      if (d) { document.getElementById('deactName').textContent = d.name || ''; try { if (typeof stream !== 'undefined' && stream) stream.getTracks().forEach(t => t.stop()); } catch (e) {} }
+    }
+    try { const d0 = JSON.parse(localStorage.getItem('tcDeact') || 'null'); if (d0) applyDeact(d0); } catch (e) {}
     const DEVICE_ID = (function () {
       try { let d = localStorage.getItem('tcDeviceId'); if (!d) { d = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('tcDeviceId', d); } return d; }
       catch (e) { return ''; }
@@ -558,6 +570,7 @@
       }
       api('staff').then(res => {
         if (!res || !res.ok) throw new Error((res && res.message) || 'Server error');
+        applyDeact(res.deactivated || null);
         if (!$('staff').value) { st.className = 'fpstatus'; st.textContent = ''; }
         const list = (res.staff || []).map(s => ({ id: s.id, name: s.name, fp: s.fp, temp: s.temp, payslipOnly: s.payslipOnly }));
         try { localStorage.setItem('tcStaff', JSON.stringify(list)); } catch (e) {}
@@ -1216,6 +1229,7 @@
       const s = currentStaff();
       api('notices', { staffId: s ? s.id : '' }, 30000).then(n => {
         if (!n || !n.ok) return;
+        applyDeact(n.deactivated || null);
         if (n.theme) applyTheme(n.theme);
         badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
         badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
