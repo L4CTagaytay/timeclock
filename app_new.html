@@ -301,11 +301,19 @@
             <option value="SICK">Sick leave</option>
             <option value="CHANGE">Change of schedule (shift time)</option>
             <option value="SWAP">Swap duty day (move my duty to another day)</option>
+            <option value="RESIGN">✉️ Resignation</option>
           </select>
-          <div class="row2"><div><div class="mini" id="rqFromLbl">From</div><input type="date" id="rqFrom"></div><div><div class="mini" id="rqToLbl">To</div><input type="date" id="rqTo"></div></div>
+          <div class="row2"><div><div class="mini" id="rqFromLbl">From</div><input type="date" id="rqFrom"></div><div><div class="mini" id="rqToLbl">To</div><input type="date" id="rqTo" onchange="resignRefresh()"></div></div>
           <div id="rqShiftRow" style="display:none"><input type="text" id="rqShift" placeholder="New shift, e.g. 12-8 or 12:00-20:00 (or OFF)"></div>
           <div id="rqCoverRow" style="display:none"><div class="mini">Who will cover the day you leave? (optional)</div><select id="rqCover"></select>
             <div class="hint" id="rqSwapHint">If someone covers, you take their duty on your new day and they take yours.</div></div>
+          <div id="rqResignRow" style="display:none">
+            <div class="mini">Resignation letter (you can edit it)</div>
+            <textarea id="rqLetter" rows="10" maxlength="5000" oninput="this.dataset.auto=''"></textarea>
+            <div class="mini">Attach your signed letter (photo or PDF, optional, max 5 MB)</div>
+            <input type="file" id="rqFile" accept="image/*,application/pdf">
+            <div class="hint" id="rqNotice"></div>
+          </div>
           <select id="rqCat">
             <option value="">— Reason for request —</option>
             <option>Family matter</option>
@@ -530,7 +538,7 @@
       sel.innerHTML = '<option value="">— Select your name —</option>';
       staffList.forEach(s => {
         const o = document.createElement('option');
-        o.value = s.id; o.textContent = s.name + (s.payslipOnly ? ' (temporary – payslip only)' : s.temp ? ' (temporary)' : '');
+        o.value = s.id; o.textContent = s.name + (s.payslipOnly ? (s.temp ? ' (temporary – payslip only)' : ' (final payslip only)') : s.temp ? ' (temporary)' : '');
         sel.appendChild(o);
       });
       if (keep && staffList.some(s => s.id === keep)) sel.value = keep;
@@ -624,7 +632,7 @@
       if (s.payslipOnly) {
         $('btnIn').disabled = true; $('btnOut').disabled = true;
         st.className = 'fpstatus yes';
-        st.textContent = '🧾 Your temporary work period has ended. Enter your code, then open My Payslips to check and accept your final payslip.';
+        st.textContent = '🧾 Your work period has ended. Enter your code, then open Payslips to check and accept your final payslip.';
         $('btnReg').style.display = 'none';
         return;
       }
@@ -1395,13 +1403,95 @@
     }
     function chipFor(st) { return st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
 
+
+    // ---- resignation ----
+    function daysDiff(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 86400000); }
+    function todayISO() { const n = new Date(); return n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2) + '-' + ('0' + n.getDate()).slice(-2); }
+    function niceDate(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch (e) { return d; } }
+    function resignTemplate() {
+      const s = currentStaff(), last = $('rqTo').value;
+      return 'Date: ' + niceDate(todayISO()) + '\n\nTo: The Management\nLife Four Cuts – Ayala Malls Serin Tagaytay\n\nDear Sir/Madam,\n\n' +
+        'Please accept this letter as my formal resignation from my position at Life Four Cuts – Ayala Malls Serin Tagaytay. ' +
+        'My last working day will be ' + (last ? niceDate(last) : '[last working day]') + '.\n\n' +
+        'Thank you for the opportunity to be part of the team. I will do my best to ensure a smooth turnover of my duties before I leave.\n\n' +
+        'Sincerely,\n' + (s ? s.name : '[your name]');
+    }
+    function resignRefresh() {
+      if ($('rqType').value !== 'RESIGN') return;
+      const L = $('rqLetter');
+      if (!L.value || L.dataset.auto === '1') { L.value = resignTemplate(); L.dataset.auto = '1'; }
+      const last = $('rqTo').value;
+      $('rqNotice').innerHTML = !last ? 'Pick your last working day.' : (daysDiff(todayISO(), last) < 30
+        ? '<b style="color:#e11d48">⚠️ Less than 30 days notice</b> (' + daysDiff(todayISO(), last) + ' days). You can still send it; the admin will decide.'
+        : '✅ ' + daysDiff(todayISO(), last) + ' days notice.');
+    }
+    // photo -> compressed JPEG; PDF as is (max 5 MB)
+    function readAttachment(f) {
+      return new Promise((resolve, reject) => {
+        if (!f) return resolve('');
+        if (f.type === 'application/pdf') {
+          if (f.size > 5 * 1024 * 1024) return reject(new Error('The PDF is too big (max 5 MB).'));
+          const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = () => reject(new Error('Could not read the file.')); fr.readAsDataURL(f); return;
+        }
+        if (!/^image\//.test(f.type)) return reject(new Error('Attach a photo or a PDF file only.'));
+        const img = new Image();
+        img.onload = () => {
+          const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          const d = c.toDataURL('image/jpeg', 0.85);
+          if (d.length > 6.8 * 1024 * 1024) return reject(new Error('The photo is too big.'));
+          resolve(d);
+        };
+        img.onerror = () => reject(new Error('Could not read the photo.'));
+        img.src = URL.createObjectURL(f);
+      });
+    }
+    function submitResignUI(a) {
+      const last = $('rqTo').value, letter = $('rqLetter').value.trim(), why = $('rqReason').value.trim();
+      if (!last) return alert('Pick your last working day.');
+      if (last < todayISO()) return alert('Your last working day cannot be in the past.');
+      if (letter.length < 20) return alert('Please write your resignation letter.');
+      const short = daysDiff(todayISO(), last) < 30;
+      if (!confirm('Send your resignation?\n\nLast working day: ' + niceDate(last) + (short ? '\n⚠️ This is less than 30 days notice.' : '') + '\n\nOnly the admin can cancel it after sending.')) return;
+      $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending your resignation…</div>';
+      readAttachment($('rqFile').files[0]).then(file =>
+        api('request', { staffId: a.s.id, pin: a.pin, type: 'RESIGN', to: last, letter: letter, reason: '[Resignation] ' + (why || 'See letter'), file: file }, 120000)
+      ).then(r => {
+        if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        alert('✅ ' + r.message);
+        $('rqType').value = ''; $('rqTo').value = ''; $('rqLetter').value = ''; $('rqFile').value = ''; $('rqReason').value = ''; rqTypeChange();
+        loadMyRequests(); refreshNotices();
+      }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Not sent: ' + esc(e.message) + '</div>'; });
+    }
+    function resignAdminHtml(x) {
+      const short = daysDiff(String(x.filedAt).slice(0, 10), x.to) < 30;
+      return '<div style="margin-top:6px">' + (short ? '<span class="chip d">Less than 30 days notice</span>' : '<span class="chip a">30+ days notice</span>') + '</div>' +
+        '<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px;font-weight:700">📄 Read letter</summary><div style="white-space:pre-wrap;font-size:13px;margin-top:6px;padding:10px;border-radius:10px;background:rgba(127,127,127,.1)">' + esc(x.letter || '') + '</div></details>' +
+        (x.hasFile ? '<button class="btn gray" style="margin-top:6px;padding:9px 0" onclick="viewResignFile(\'' + x.id + '\')">📎 View attachment</button><div id="rf_' + x.id + '"></div>' : '<div class="note">No attachment.</div>');
+    }
+    function viewResignFile(id) {
+      const box = $('rf_' + id); box.innerHTML = '<div class="note">Loading attachment…</div>';
+      adminCall('resignFile', { id: id }, 90000).then(r => {
+        if (!r.ok) { box.innerHTML = '<div class="note" style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        const bin = atob(r.data), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([u], { type: r.mime }));
+        box.innerHTML = /^image\//.test(r.mime) ? '<img src="' + url + '" style="width:100%;border-radius:10px;margin-top:6px">'
+          : '<a href="' + url + '" target="_blank" rel="noopener" download="' + esc(r.name) + '" class="sbtn" style="display:block;text-align:center;text-decoration:none;color:#fff;padding:12px 0">Open PDF</a>';
+      }).catch(e => { box.innerHTML = '<div class="note" style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
     // ---- request form: Swap duty day ----
     function rqTypeChange() {
-      const t = $('rqType').value, swap = t === 'SWAP';
+      const t = $('rqType').value, swap = t === 'SWAP', resign = t === 'RESIGN';
+      $('rqResignRow').style.display = resign ? 'block' : 'none';
+      $('rqFrom').parentElement.style.display = resign ? 'none' : '';
+      $('rqCat').style.display = resign ? 'none' : '';
+      $('rqReason').placeholder = resign ? 'Reason for resigning (short, optional)' : 'Details (e.g. what, where, why)';
       $('rqShiftRow').style.display = (t === 'CHANGE' || swap) ? 'block' : 'none';
       $('rqCoverRow').style.display = swap ? 'block' : 'none';
       $('rqFromLbl').textContent = swap ? 'Day I will NOT work' : 'From';
-      $('rqToLbl').textContent = swap ? 'Day I will work instead' : 'To';
+      $('rqToLbl').textContent = resign ? 'Last working day' : swap ? 'Day I will work instead' : 'To';
+      if (resign) { $('rqLetter').dataset.auto = $('rqLetter').value ? $('rqLetter').dataset.auto : '1'; resignRefresh(); }
       $('rqShift').placeholder = swap ? 'Shift on the new day (blank = same shift / cover’s shift)' : 'New shift, e.g. 12-8 or 12:00-20:00 (or OFF)';
       if (swap) {
         const me = currentStaff();
@@ -1409,6 +1499,7 @@
       }
     }
     function reqWhen(x) {
+      if (x.type === 'RESIGN') return '✉️ Last working day: <b>' + esc(niceDate(x.to)) + '</b>';
       if (x.type === 'SWAP') {
         const sh = x.newShift ? ' (' + shortShift(x.newShift) + ')' : '';
         if (x.mine === false) return '🔁 You cover <b>' + esc(x.name) + '</b> on ' + esc(x.from) + '; your ' + esc(x.to) + ' duty moves to ' + esc(String(x.name).split(' ')[0]) + '.';
@@ -1420,6 +1511,7 @@
       const a = needPin('reqOut'); if (!a) return;
       const type = $('rqType').value, from = $('rqFrom').value, to = $('rqTo').value || $('rqFrom').value, reason = $('rqReason').value.trim();
       if (!type) return alert('Pick the type of request.');
+      if (type === 'RESIGN') return submitResignUI(a);
       if (!from) return alert('Pick the date.');
       if (type === 'SWAP') {
         if (!$('rqTo').value) return alert('Pick the day you will work instead.');
@@ -1470,10 +1562,10 @@
         $('aReqOut').innerHTML = r.requests.map(x => {
           const auto = x.status === 'DENIED' && /Automatically denied/.test(x.note);
           const act = (x.status === 'PENDING' || auto) ? '<input id="an_' + x.id + '" placeholder="Note to staff (optional)" style="margin-top:6px">' +
-            '<div class="row"><button class="btn green" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', true)">' + (auto ? 'Override &amp; approve' : 'Approve') + '</button>' +
-            (x.status === 'PENDING' ? '<button class="btn red" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', false)">Deny</button>' : '') + '</div>' : '';
+            '<div class="row"><button class="btn green" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', true)">' + (auto ? 'Override &amp; approve' : x.type === 'RESIGN' ? 'Accept resignation' : 'Approve') + '</button>' +
+            (x.status === 'PENDING' ? '<button class="btn red" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', false)">' + (x.type === 'RESIGN' ? 'Reject' : 'Deny') + '</button>' : '') + '</div>' : '';
           return '<div class="pcard"><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
-            '<div style="font-size:13px;margin-top:4px">' + reqWhen(x) + '</div>' +
+            '<div style="font-size:13px;margin-top:4px">' + reqWhen(x) + '</div>' + (x.type === 'RESIGN' ? resignAdminHtml(x) : '') +
             (/RECONSIDERATION:/.test(x.reason) && x.status === 'PENDING' ? ' <span class="chip p">Reconsideration – late request</span>' : '') +
             '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '') +
             '<div style="font-size:11px;color:#94a3b8">Filed ' + esc(x.filedAt) + (x.decidedAt ? ' • decided ' + esc(x.decidedAt) : '') + '</div>' + act + '</div>';
@@ -1550,7 +1642,7 @@
         if (drafts) h += '<button class="btn green" onclick="releaseUI(\'all\')">Release all ' + drafts + ' reviewed payslips</button>';
         d.rows.forEach(x => {
           const chip = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">' + (x.kind === 'TEMP-FINAL' ? 'Sent automatically' : 'Released') + ' – waiting for acceptance</span>';
-          const fin = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e">Temporary – final ' + esc(x.period) + '</span>' : '';
+          const fin = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e">Temporary – final ' + esc(x.period) + '</span>' : x.kind === 'FINAL' ? ' <span class="chip" style="background:#fde2e8;color:#9f1239">Final pay – resigned ' + esc(x.period) + '</span>' : '';
           h += '<div class="pcard"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div><b>' + esc(x.name) + '</b> ' + chip + fin + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</div>' +
             '<div style="font-weight:800;color:#16a34a">' + peso(x.slip ? x.slip.finalGross : 0) + '</div></div>' +
             '<button class="btn gray" style="margin-top:6px;padding:8px 0" onclick="toggleSlip(\'' + x.staffId + '\')">View / hide payslip</button>' +
