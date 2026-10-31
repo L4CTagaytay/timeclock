@@ -1579,10 +1579,33 @@
           return '<div class="pcard"><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
             '<div style="font-size:13px;margin-top:4px">' + reqWhen(x) + '</div>' + (x.type === 'RESIGN' ? resignAdminHtml(x) : '') +
             (/RECONSIDERATION:/.test(x.reason) && x.status === 'PENDING' ? ' <span class="chip p">Reconsideration – late request</span>' : '') +
-            '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '') +
+            '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + noteHtml(x, auto) +
             '<div style="font-size:11px;color:#94a3b8">Filed ' + esc(x.filedAt) + (x.decidedAt ? ' • decided ' + esc(x.decidedAt) : '') + '</div>' + act + '</div>';
         }).join('');
       }).catch(e => { $('aReqOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+
+    // ---- admin: edit the note on a decided request (fix typos) ----
+    const reqNotes = {};
+    function noteHtml(x, auto) {
+      reqNotes[x.id] = x.note || '';
+      const show = x.note ? '<div style="font-size:12px;color:#667;margin-top:2px">Note: ' + esc(x.note) + '</div>' : '';
+      if (x.status === 'PENDING' || auto) return show;
+      return show + '<button class="btn gray" style="margin-top:6px;padding:7px 0;font-size:13px" onclick="editNoteUI(\'' + x.id + '\')">✏️ ' + (x.note ? 'Edit note' : 'Add note') + '</button><div id="ne_' + x.id + '"></div>';
+    }
+    function editNoteUI(id) {
+      const box = $('ne_' + id); if (!box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      box.innerHTML = '<textarea id="nv_' + id + '" rows="3" maxlength="500" style="width:100%;margin-top:6px;padding:10px;border-radius:12px;font-family:inherit;font-size:14px"></textarea>' +
+        '<button class="btn green" style="margin-top:6px;padding:9px 0" onclick="saveNoteUI(\'' + id + '\')">Save note</button>';
+      $('nv_' + id).value = reqNotes[id] || '';
+      $('nv_' + id).focus();
+    }
+    function saveNoteUI(id) {
+      const v = $('nv_' + id).value.trim();
+      amsg('aReqMsg', 'Saving…', true);
+      adminCall('editNote', { id: id, note: v }).then(r => { amsg('aReqMsg', r.message, r.ok); if (r.ok) loadAdminRequests(); })
+        .catch(e => amsg('aReqMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
     function decideUI(id, approve) {
       const note = ($('an_' + id) || {}).value || '';
