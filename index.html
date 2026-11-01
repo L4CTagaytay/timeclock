@@ -362,6 +362,7 @@
     </div>
 
     <div id="adminView" class="adm" style="display:none">
+      <div id="relDue" class="snotice" style="display:none;margin-top:12px"></div>
       <div class="card" id="admLock">
         <b>Admin access</b>
         <div class="note">Enter the admin access code to open the owner tools.</div>
@@ -1225,11 +1226,24 @@
     if (!standalone && /iphone|ipad|ipod/i.test(navigator.userAgent)) $('iosHint').style.display = 'block';
     // ===================== NOTICES (badges) =====================
     function badge(id, n) { const el = $(id); if (el) el.innerHTML = n > 0 ? '<span class="badge">' + n + '</span>' : ''; }
+
+    // ---- admin reminder: payslips waiting for release (from 11:00 AM on the 16th / 1st) ----
+    function showReleaseDue(list) {
+      const el = $('relDue'); if (!el) return;
+      if (!list.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+      el.innerHTML = list.map(x => {
+        const over = Date.parse(String(x.target).replace(' ', 'T')) < Date.now();
+        return '⏰ <b>Payslip release reminder:</b> ' + x.count + ' payslip(s) for ' + esc(x.start) + ' to ' + esc(x.end) + ' are waiting for your release. ' +
+          (over ? '<b style="color:#e11d48">Overdue</b> (target was ' + esc(x.target) + ').' : 'Target: <b>' + esc(x.target) + '</b>.');
+      }).join('<br>') + '<button class="btn" style="margin-top:8px;padding:9px 0" onclick="if (adminCode) adminTab(\'psl\'); else $(\'admCode\').focus()">Open ✅ Payslips</button>';
+      el.style.display = 'block';
+    }
     function refreshNotices() {
       const s = currentStaff();
       api('notices', { staffId: s ? s.id : '' }, 30000).then(n => {
         if (!n || !n.ok) return;
         applyDeact(n.deactivated || null);
+        showReleaseDue(n.releaseDue || []);
         if (n.theme) applyTheme(n.theme);
         badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
         badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
