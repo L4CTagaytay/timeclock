@@ -1003,6 +1003,7 @@
       $('adminView').style.display = v === 'admin' ? 'block' : 'none';
       $('navStaff').className = v === 'staff' ? 'on' : '';
       $('navAdmin').className = 'pill' + (v === 'admin' ? ' on' : '');
+      if (v === 'admin') { try { refreshNotices(); } catch (e) {} }
       $('navStaff').className = 'pill' + (v === 'staff' ? ' on' : '');
       window.scrollTo(0, 0);
     }
