@@ -1462,7 +1462,8 @@
       { n: 10, q: 'Would you recommend working at Life4Cuts Tagaytay to others?', opts: ['Yes', 'Maybe', 'No'], cl: 'Why or why not?' },
       { n: 11, q: 'If you committed an error or mistake during your work in the photobooth, how did you usually handle the situation?', hint: 'Examples: wrong print layout, customer concern, cash shortage, delayed opening, damaged equipment, missed content posting, editing mistake, printer issue, etc.',
         opts: ['I immediately informed management or the supervisor honestly', 'I informed my co-staff/team members and asked for help to resolve it', 'I tried to solve the issue first before reporting it', 'I kept the mistake to myself and did not report it', 'Other'], cl: 'Please share an example and explain how the situation was handled:', vertical: true },
-      { n: 12, q: 'In your opinion, how important is honesty and accountability in daily photobooth operations?' }
+      { n: 12, q: 'In your opinion, how important is honesty and accountability in daily photobooth operations?' },
+      { n: 13, q: 'Did you complete the 1-month (30 days) notice period?', opts: ['Yes', 'No'], cl: 'If no, please provide a valid reason:', reasonIf: 'No' }
     ];
     const EXIT_RETURNED = ['Company/Mall ID(s)/ID Lanyard', 'Store Uniform', 'Store Apron', 'Store Keys'];
     const EXIT_RECEIVED = ['Letter Reference No.', 'Final Pay'];
@@ -1559,6 +1560,7 @@
         const text = $('eqt' + q.n).value.trim();
         if (q.opts && !ch) return alert('Please answer question ' + q.n + '.');
         if (q.req && !text) return alert('Please answer question ' + q.n + '.');
+        if (q.reasonIf && ch === q.reasonIf && !text) return alert('Question ' + q.n + ': please provide a valid reason.');
         const other = q.opts && q.opts.indexOf('Other') !== -1 ? $('eqo' + q.n).value.trim() : '';
         if (ch === 'Other' && !other) return alert('Please describe "Other" in question ' + q.n + '.');
         items.push({ n: String(q.n), q: q.q, options: q.opts || [], choice: ch, other: other, commentLabel: q.cl || '', text: text });
