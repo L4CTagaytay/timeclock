@@ -203,6 +203,9 @@
     .switch input:checked + .sl:before { transform: translateX(20px); }
     html.dark .switch .sl { background: #3a3a44; }
     html.dark .switch input:checked + .sl { background: var(--pink); }
+    .sigpad { width: 100%; height: 160px; background: #fff; border: 1.5px dashed #b9b9c6; border-radius: 12px; touch-action: none; display: block; margin-top: 6px; }
+    .exq { margin-top: 14px; } .exq .qt { font-weight: 700; font-size: 14px; } .exq .qh { font-size: 12px; color: var(--sub); margin-top: 2px; }
+    .exopt { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; margin-top: 6px; } .exopt input { width: auto; margin-top: 3px; flex: none; }
     .deact { position: fixed; inset: 0; z-index: 200; background: #0b0b0e; color: #fff; display: none; align-items: center; justify-content: center; padding: 32px; text-align: center; }
     .deact .dic { font-size: 68px; } .deact .dt { font-size: 25px; font-weight: 800; margin: 12px 0 6px; } .deact .dn { font-size: 16px; color: #ff4d8d; font-weight: 700; }
     .deact .ds { font-size: 14px; color: #c9c9d6; margin-top: 12px; line-height: 1.55; } .deact img { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 8px; }
@@ -336,6 +339,12 @@
           <h2>📋 My requests</h2>
           <button class="sbtn gray" onclick="loadMyRequests()">Show my requests</button>
           <div id="reqOut"></div>
+        </div>
+        <div class="wsched" id="exitCard" style="display:none">
+          <h2>📋 Exit forms</h2>
+          <div class="hint">Please complete these before you accept your final payslip. Enter your code above first.</div>
+          <button class="sbtn" onclick="loadExit()">Open my exit forms</button>
+          <div id="exitOut"></div>
         </div>
       </section>
 
@@ -1252,6 +1261,8 @@
         badge('bdgPay', n.newPayslips || 0); badge('bdgReq', n.requestUpdates || 0);
         const msgs = [];
         if (n.newPayslips) msgs.push('🔔 Your payslip is ready. Please check and accept it under <b>My Payslips</b>.');
+        $('exitCard').style.display = n.exitPending ? 'block' : 'none';
+        if (n.exitPending) msgs.push('📋 Please complete your <b>exit forms</b> (Requests tab → Exit forms) before accepting your final payslip.');
         if (n.requestUpdates) msgs.push('🔔 The admin answered your request. Tap <b>My requests</b> to see it.');
         $('staffNotice').innerHTML = msgs.join('<br>');
         $('staffNotice').style.display = msgs.length ? 'block' : 'none';
@@ -1433,6 +1444,200 @@
     function chipFor(st) { return st === 'REHIRED' ? '<span class="chip a">Re-activated</span>' : st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
 
 
+
+    // ===================== EXIT FORMS (Exit Interview + Exit Clearance) =====================
+    const EXIT_REASONS = ['Resignation', 'End of Contract', 'School Schedule', 'Personal Reasons', 'Relocation', 'Career Growth', 'Other'];
+    const EXIT_REMINDERS = ['Company ID', 'Locker Key (if applicable)', 'Company Materials/Props', 'Store Uniform/Shirt', 'Turnover of Pending Tasks', 'Passwords/Files/Social Media Access (if applicable)'];
+    const EXIT_Q = [
+      { n: 1, q: 'What made you decide to leave Life4Cuts Tagaytay?', req: true },
+      { n: 2, q: 'How would you describe your overall experience working in the photobooth?' },
+      { n: 3, q: 'Were your daily tasks and responsibilities clearly explained and manageable?', opts: ['Yes', 'Sometimes', 'No'], cl: 'Comments' },
+      { n: 4, q: 'Which part of your daily work did you enjoy the most?', hint: 'Examples: assisting customers, editing layouts, social media, cleaning, opening/closing duties, content creation, etc.' },
+      { n: 5, q: 'Which part of the job did you find the most difficult or stressful?' },
+      { n: 6, q: 'How would you rate teamwork and communication among staff members?', opts: ['Excellent', 'Good', 'Fair', 'Poor'], cl: 'Comments' },
+      { n: 7, q: 'Did you receive enough support, training, and guidance from management?', opts: ['Yes', 'Somewhat', 'No'], cl: 'Comments' },
+      { n: 8, q: 'What suggestions do you have to improve daily operations in the photobooth?', hint: 'Examples: customer handling, scheduling, cleanliness, content creation, printing process, staff coordination, etc.' },
+      { n: 9, q: 'Do you feel your contributions and efforts were appreciated?', opts: ['Yes', 'Sometimes', 'No'], cl: 'Comments' },
+      { n: 10, q: 'Would you recommend working at Life4Cuts Tagaytay to others?', opts: ['Yes', 'Maybe', 'No'], cl: 'Why or why not?' },
+      { n: 11, q: 'If you committed an error or mistake during your work in the photobooth, how did you usually handle the situation?', hint: 'Examples: wrong print layout, customer concern, cash shortage, delayed opening, damaged equipment, missed content posting, editing mistake, printer issue, etc.',
+        opts: ['I immediately informed management or the supervisor honestly', 'I informed my co-staff/team members and asked for help to resolve it', 'I tried to solve the issue first before reporting it', 'I kept the mistake to myself and did not report it', 'Other'], cl: 'Please share an example and explain how the situation was handled:', vertical: true },
+      { n: 12, q: 'In your opinion, how important is honesty and accountability in daily photobooth operations?' }
+    ];
+    const EXIT_RETURNED = ['Company/Mall ID(s)/ID Lanyard', 'Store Uniform', 'Store Apron', 'Store Keys'];
+    const EXIT_RECEIVED = ['Letter Reference No.', 'Final Pay'];
+
+    // signature pad
+    function sigPadHtml(id, label) { return '<div class="mini">' + (label || 'Sign here with your finger') + '</div><canvas id="' + id + '" class="sigpad"></canvas><button type="button" class="sbtn gray" style="margin-top:6px;padding:8px 0" onclick="sigClear(\'' + id + '\')">Clear signature</button>'; }
+    function sigInit(id) {
+      const c = $(id); if (!c) return;
+      const k = window.devicePixelRatio || 1, w = c.getBoundingClientRect().width || 300;
+      c.width = Math.round(w * k); c.height = Math.round(160 * k);
+      const g = c.getContext('2d'); g.scale(k, k); g.lineWidth = 2.4; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#111';
+      c.dataset.ink = '0'; let down = false, last = null;
+      const pos = e => { const b = c.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+      c.onpointerdown = e => { down = true; last = pos(e); try { c.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); };
+      c.onpointermove = e => { if (!down) return; const p = pos(e); g.beginPath(); g.moveTo(last[0], last[1]); g.lineTo(p[0], p[1]); g.stroke(); last = p; c.dataset.ink = String(+c.dataset.ink + 1); e.preventDefault(); };
+      c.onpointerup = c.onpointercancel = c.onpointerleave = () => { down = false; };
+    }
+    function sigClear(id) { const c = $(id); if (!c) return; c.getContext('2d').clearRect(0, 0, c.width, c.height); c.dataset.ink = '0'; }
+    function sigData(id) {
+      const c = $(id); if (!c || +c.dataset.ink < 8) return '';
+      const o = document.createElement('canvas'); o.width = c.width; o.height = c.height;
+      const g = o.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, o.width, o.height); g.drawImage(c, 0, 0);
+      return o.toDataURL('image/png');
+    }
+
+    // ---- staff side ----
+    let exitData = null;
+    function loadExit() {
+      const a = needPin('exitOut'); if (!a) return;
+      $('exitOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
+      api('myexit', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (!r.ok) { $('exitOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        if (!r.exit) { $('exitOut').innerHTML = '<div class="hint">You have no exit forms.</div>'; return; }
+        exitData = r.exit; renderExit();
+      }).catch(e => { $('exitOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function clearanceViewHtml(d) {
+      const st = v => v === 'RETURNED' ? '✅ Returned' : v === 'NA' ? 'N/A' : '—';
+      return '<div style="font-size:13px;margin-top:8px">' + esc(d.name || '') + ' · ' + esc(d.position || '') + ' · ' + esc(d.sepType || '') + '<br>Date hired: ' + esc(d.dateHired || '—') + ' · Last working day: ' + esc(d.lastDay || '') + '</div>' +
+        '<table><tr><th>Items returned</th><th>Status</th><th>Remarks</th></tr>' + (d.returned || []).map(x => '<tr><td>' + esc(x.item) + '</td><td>' + st(x.status) + '</td><td>' + esc(x.remarks || '') + '</td></tr>').join('') + '</table>' +
+        '<table><tr><th>Items received</th><th>Received</th><th>Remarks</th></tr>' + (d.received || []).map(x => '<tr><td>' + esc(x.item) + '</td><td>' + (x.received ? '✅' : '—') + '</td><td>' + esc(x.remarks || '') + '</td></tr>').join('') + '</table>' +
+        '<div style="font-size:12px;margin-top:6px">Checked and verified by: <b>' + esc(d.mgmtName || '') + '</b></div>';
+    }
+    function renderExit() {
+      const x = exitData; let h = '';
+      h += '<div class="pcard"><b>1. Exit Interview Form</b> ' + (x.interviewAt ? '<span class="chip a">Submitted ' + esc(x.interviewAt) + '</span>' : '<span class="chip p">To do</span>');
+      if (!x.interviewAt) h += '<button class="sbtn" onclick="openInterview()">Fill in the Exit Interview</button><div id="intForm"></div>';
+      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (x.ackAt ? '<span class="chip a">Signed ' + esc(x.ackAt) + '</span>' : x.verifiedAt ? '<span class="chip p">Please review and sign</span>' : '<span class="chip p">Waiting for the admin</span>');
+      if (x.verifiedAt && x.clearance) {
+        h += clearanceViewHtml(x.clearance);
+        if (!x.ackAt) h += '<div class="hint" style="margin-top:8px"><b>Employee Acknowledgment:</b> I hereby certify that the above information is true and that I have returned all company properties under my responsibility. I understand that any pending obligations may be deducted from my final pay.</div>' +
+          sigPadHtml('sigAck') + '<button class="sbtn green" onclick="submitAckUI()">Sign &amp; submit</button>';
+      } else if (!x.verifiedAt) h += '<div class="hint">Return all company items (ID/lanyard, uniform, apron, keys) to the admin. The admin will prepare your clearance, then you sign it here.</div>';
+      h += '</div>';
+      if (x.interviewAt && x.ackAt) h += '<div class="hint" style="margin-top:8px">✅ All exit forms are complete. You can now accept your final payslip in the Payslips tab.</div>';
+      $('exitOut').innerHTML = h;
+      if (x.verifiedAt && !x.ackAt) setTimeout(() => sigInit('sigAck'), 60);
+    }
+    function openInterview() {
+      const x = exitData, box = $('intForm'); if (!box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      let h = '<div class="hint" style="margin-top:8px">Thank you for being part of our team. Your honest feedback will help us improve our workplace, operations, and staff experience for future team members. All answers will be treated professionally and confidentially.</div>' +
+        '<div class="mini" style="margin-top:10px">Name</div><input type="text" value="' + esc(x.name) + '" disabled>' +
+        '<div class="mini">Position *</div><input type="text" id="ei_position" placeholder="e.g. Store Staff">' +
+        '<div class="row2"><div><div class="mini">Date hired *</div><input type="date" id="ei_hired"></div><div><div class="mini">Last working day</div><input type="text" value="' + esc(x.lastDay) + '" disabled></div></div>' +
+        '<div class="mini">Immediate supervisor</div><input type="text" id="ei_super">' +
+        '<div class="exq"><div class="qt">Reason for leaving *</div>' + EXIT_REASONS.map(r => '<label class="exopt"><input type="checkbox" class="eiR" value="' + esc(r) + '">' + esc(r) + '</label>').join('') +
+        '<input type="text" id="ei_rother" placeholder="Other reason"></div>';
+      EXIT_Q.forEach(q => {
+        h += '<div class="exq"><div class="qt">' + q.n + '. ' + esc(q.q) + (q.req || q.opts ? ' *' : '') + '</div>' + (q.hint ? '<div class="qh">(' + esc(q.hint) + ')</div>' : '');
+        if (q.opts) h += q.opts.map(o => '<label class="exopt"><input type="radio" name="eq' + q.n + '" value="' + esc(o) + '">' + esc(o) + '</label>').join('') + (q.opts.indexOf('Other') !== -1 ? '<input type="text" id="eqo' + q.n + '" placeholder="Other">' : '');
+        if (q.cl) h += '<div class="qh" style="margin-top:6px">' + esc(q.cl) + '</div>';
+        h += '<textarea id="eqt' + q.n + '" rows="' + (q.opts ? 2 : 3) + '" maxlength="1500"></textarea></div>';
+      });
+      h += '<div class="exq"><div class="qt">Final comments or message to management</div><textarea id="ei_final" rows="3" maxlength="2000"></textarea></div>' +
+        '<div class="exq"><div class="qt">Clearance reminders</div>' + EXIT_REMINDERS.map(r => '<label class="exopt"><input type="checkbox" class="eiM" value="' + esc(r) + '">' + esc(r) + '</label>').join('') + '</div>' +
+        '<div class="exq">' + sigPadHtml('sigInt', 'Employee signature (sign with your finger) *') + '</div>' +
+        '<button class="sbtn green" onclick="submitInterviewUI()">Submit Exit Interview</button>';
+      box.innerHTML = h;
+      setTimeout(() => sigInit('sigInt'), 60);
+    }
+    function submitInterviewUI() {
+      const a = needPin('exitOut'); if (!a) return;
+      const x = exitData;
+      const reasons = [...document.querySelectorAll('.eiR')].filter(e => e.checked).map(e => e.value);
+      const info = { name: x.name, position: $('ei_position').value.trim(), dateHired: $('ei_hired').value, lastDay: x.lastDay, supervisor: $('ei_super').value.trim(), reasons: reasons, reasonOther: $('ei_rother').value.trim() };
+      if (!info.position) return alert('Please enter your position.');
+      if (!info.dateHired) return alert('Please enter your date hired.');
+      if (!reasons.length) return alert('Please tick your reason for leaving.');
+      if (reasons.indexOf('Other') !== -1 && !info.reasonOther) return alert('Please write your other reason for leaving.');
+      const items = [];
+      for (const q of EXIT_Q) {
+        const ch = q.opts ? ((document.querySelector('input[name="eq' + q.n + '"]:checked') || {}).value || '') : '';
+        const text = $('eqt' + q.n).value.trim();
+        if (q.opts && !ch) return alert('Please answer question ' + q.n + '.');
+        if (q.req && !text) return alert('Please answer question ' + q.n + '.');
+        const other = q.opts && q.opts.indexOf('Other') !== -1 ? $('eqo' + q.n).value.trim() : '';
+        if (ch === 'Other' && !other) return alert('Please describe "Other" in question ' + q.n + '.');
+        items.push({ n: String(q.n), q: q.q, options: q.opts || [], choice: ch, other: other, commentLabel: q.cl || '', text: text });
+      }
+      const sig = sigData('sigInt'); if (!sig) return alert('Please sign in the signature box.');
+      const answers = { info: info, items: items, finalComments: $('ei_final').value.trim(), reminders: EXIT_REMINDERS.map(r => ({ label: r, checked: [...document.querySelectorAll('.eiM')].some(e => e.checked && e.value === r) })) };
+      if (!confirm('Submit your Exit Interview Form? You cannot change it after sending.')) return;
+      $('exitOut').insertAdjacentHTML('afterbegin', '<div id="exSending" style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>');
+      api('exitinterview', { staffId: a.s.id, pin: a.pin, answers: answers, signature: sig }, 120000).then(r => {
+        alert((r.ok ? '✅ ' : '❌ ') + r.message); if (r.ok) { loadExit(); refreshNotices(); } else { const e = $('exSending'); if (e) e.remove(); }
+      }).catch(e => { alert('Connection error — NOT sent. Please try again. (' + e.message + ')'); const el = $('exSending'); if (el) el.remove(); });
+    }
+    function submitAckUI() {
+      const a = needPin('exitOut'); if (!a) return;
+      const sig = sigData('sigAck'); if (!sig) return alert('Please sign in the signature box.');
+      if (!confirm('Sign and submit your Exit Clearance acknowledgment?')) return;
+      api('exitack', { staffId: a.s.id, pin: a.pin, signature: sig }, 90000).then(r => { alert((r.ok ? '✅ ' : '❌ ') + r.message); if (r.ok) { loadExit(); refreshNotices(); } })
+        .catch(e => alert('Connection error — NOT sent. Please try again. (' + e.message + ')'));
+    }
+
+    // ---- admin side ----
+    const axData = {};
+    function adminExitUI(staffId, reqId) {
+      const box = $('ax_' + reqId); if (!box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      box.innerHTML = '<div class="note">Loading exit forms…</div>';
+      adminCall('exitGet', { staffId: staffId }, 60000).then(r => {
+        if (!r.ok) { box.innerHTML = '<div class="note" style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        axData[reqId] = r; box.innerHTML = adminExitHtml(r, reqId); setTimeout(() => sigInit('axs_' + reqId), 60);
+      }).catch(e => { box.innerHTML = '<div class="note" style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function adminExitHtml(r, id) {
+      const iv = r.interview || {}, inf = iv.info || {};
+      let h = '<div class="pcard"><b>1. Exit Interview</b> ' + (r.interviewAt ? '<span class="chip a">Submitted ' + esc(r.interviewAt) + '</span>' : '<span class="chip p">Not yet submitted</span>');
+      if (r.interviewAt) {
+        h += '<details style="margin-top:6px"><summary style="cursor:pointer;font-weight:700;font-size:13px">View answers</summary><div style="font-size:13px;margin-top:6px">' +
+          'Position: <b>' + esc(inf.position || '') + '</b> · Date hired: <b>' + esc(inf.dateHired || '') + '</b> · Supervisor: ' + esc(inf.supervisor || '—') + '<br>Reason: ' + esc((inf.reasons || []).join(', ')) + (inf.reasonOther ? ' (' + esc(inf.reasonOther) + ')' : '') +
+          (iv.items || []).map(it => '<div style="margin-top:8px"><b>' + esc(it.n) + '. ' + esc(it.q) + '</b>' + (it.choice ? '<br>➜ ' + esc(it.choice) + (it.other ? ': ' + esc(it.other) : '') : '') + (it.text ? '<div style="white-space:pre-wrap;color:#445">' + esc(it.text) + '</div>' : '') + '</div>').join('') +
+          (iv.finalComments ? '<div style="margin-top:8px"><b>Final comments:</b><div style="white-space:pre-wrap">' + esc(iv.finalComments) + '</div></div>' : '') + '</div></details>';
+        if (r.hasIntPdf) h += '<button class="btn gray" style="margin-top:6px;padding:9px 0" onclick="adminExitPdfUI(\'' + r.staffId + '\',\'interview\',\'axp1_' + id + '\')">📄 Exit Interview PDF</button><div id="axp1_' + id + '"></div>';
+      }
+      const d = r.clearance || {}, ret = d.returned || EXIT_RETURNED.map(x => ({ item: x, status: '', remarks: '' })), rec = d.received || EXIT_RECEIVED.map(x => ({ item: x, received: false, remarks: '' }));
+      const f = (k, label, v, type) => '<div class="mini">' + label + '</div><input type="' + (type || 'text') + '" id="axc_' + id + '_' + k + '" value="' + esc(v || '') + '">';
+      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (r.ackAt ? '<span class="chip a">Signed by staff ' + esc(r.ackAt) + '</span>' : r.verifiedAt ? '<span class="chip p">Waiting for staff signature</span>' : '<span class="chip p">Fill in &amp; verify</span>') +
+        '<div class="row2"><div>' + f('company', 'Company name', d.company || 'Life Four Cuts') + '</div><div>' + f('branch', 'Branch location', d.branch || 'Ayala Malls Serin Tagaytay') + '</div></div>' +
+        '<div class="row2"><div>' + f('name', 'Employee name', d.name || r.name) + '</div><div>' + f('position', 'Position', d.position || inf.position) + '</div></div>' +
+        '<div class="row2"><div>' + f('empNo', 'Employee no.', d.empNo || r.staffId) + '</div><div>' + f('sepType', 'Type of separation', d.sepType || 'Resignation') + '</div></div>' +
+        '<div class="row2"><div>' + f('dateHired', 'Date hired', d.dateHired || inf.dateHired, 'date') + '</div><div>' + f('lastDay', 'Last working day', d.lastDay || r.lastDay, 'date') + '</div></div>' +
+        '<h4>Items returned by employee</h4>' + ret.map((x, i) => '<div class="row" style="margin-top:6px"><span style="flex:1.4;font-size:13px">' + (i + 1) + '. ' + esc(x.item) + '</span><select id="axr_' + id + '_' + i + '" style="flex:1"><option value="">—</option><option value="RETURNED"' + (x.status === 'RETURNED' ? ' selected' : '') + '>Returned ✔</option><option value="NA"' + (x.status === 'NA' ? ' selected' : '') + '>N/A</option></select></div><input type="text" id="axrr_' + id + '_' + i + '" placeholder="Remarks" value="' + esc(x.remarks || '') + '" style="margin-top:4px">').join('') +
+        '<h4>Items received by employee</h4>' + rec.map((x, i) => '<label class="exopt"><input type="checkbox" id="axv_' + id + '_' + i + '"' + (x.received ? ' checked' : '') + '>' + (i + 1) + '. ' + esc(x.item) + ' – received</label><input type="text" id="axvr_' + id + '_' + i + '" placeholder="Remarks' + (i === 0 ? ' (letter reference no.)' : '') + '" value="' + esc(x.remarks || '') + '" style="margin-top:4px">').join('') +
+        '<h4>L4C Management Approval</h4>' + f('mgmt', 'Checked and verified by (management name)', d.mgmtName) +
+        '<div class="note">' + (r.hasMgmtSig ? 'Your signature is on file. Sign below only to replace it.' : 'Sign below as management.') + '</div>' + sigPadHtml('axs_' + id, 'Management signature') +
+        '<button class="btn green" style="margin-top:8px" onclick="adminSaveClearanceUI(\'' + r.staffId + '\',\'' + id + '\')">Save &amp; verify clearance</button>' +
+        (r.hasClrPdf ? '<button class="btn gray" style="margin-top:6px;padding:9px 0" onclick="adminExitPdfUI(\'' + r.staffId + '\',\'clearance\',\'axp2_' + id + '\')">📄 Exit Clearance PDF</button><div id="axp2_' + id + '"></div>' : '') + '</div>';
+      return h;
+    }
+    function adminSaveClearanceUI(staffId, id) {
+      const g = k => ($('axc_' + id + '_' + k) || {}).value || '';
+      const data = { company: g('company'), branch: g('branch'), name: g('name'), position: g('position'), empNo: g('empNo'), sepType: g('sepType'), dateHired: g('dateHired'), lastDay: g('lastDay'), mgmtName: g('mgmt').trim(),
+        returned: EXIT_RETURNED.map((x, i) => ({ item: x, status: $('axr_' + id + '_' + i).value, remarks: $('axrr_' + id + '_' + i).value.trim() })),
+        received: EXIT_RECEIVED.map((x, i) => ({ item: x, received: $('axv_' + id + '_' + i).checked, remarks: $('axvr_' + id + '_' + i).value.trim() })) };
+      if (!data.mgmtName) return alert('Enter the management name (Checked and verified by).');
+      const sig = sigData('axs_' + id);
+      if (!sig && !(axData[id] || {}).hasMgmtSig) return alert('Please sign as management.');
+      amsg('aReqMsg', 'Saving clearance…', true);
+      adminCall('exitClearance', { staffId: staffId, data: data, signature: sig }, 120000).then(r => {
+        amsg('aReqMsg', r.message, r.ok);
+        if (r.ok) { const box = $('ax_' + id); box.innerHTML = ''; adminExitUI(staffId, id); }
+      }).catch(e => amsg('aReqMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function adminExitPdfUI(staffId, which, boxId) {
+      const box = $(boxId); box.innerHTML = '<div class="note">Loading PDF…</div>';
+      adminCall('exitPdf', { staffId: staffId, which: which }, 90000).then(r => {
+        if (!r.ok) { box.innerHTML = '<div class="note" style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        const bin = atob(r.data), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([u], { type: 'application/pdf' }));
+        box.innerHTML = '<a href="' + url + '" target="_blank" rel="noopener" download="' + esc(r.name) + '" class="sbtn" style="display:block;text-align:center;text-decoration:none;color:#fff;padding:12px 0">Open ' + esc(r.name) + '</a>';
+      }).catch(e => { box.innerHTML = '<div class="note" style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+
     // ---- resignation ----
     function daysDiff(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 86400000); }
     function todayISO() { const n = new Date(); return n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2) + '-' + ('0' + n.getDate()).slice(-2); }
@@ -1495,7 +1700,8 @@
       const short = daysDiff(String(x.filedAt).slice(0, 10), x.to) < 30;
       return '<div style="margin-top:6px">' + (short ? '<span class="chip d">Less than 30 days notice</span>' : '<span class="chip a">30+ days notice</span>') + '</div>' +
         '<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px;font-weight:700">📄 Read letter</summary><div style="white-space:pre-wrap;font-size:13px;margin-top:6px;padding:10px;border-radius:10px;background:rgba(127,127,127,.1)">' + esc(x.letter || '') + '</div></details>' +
-        (x.hasFile ? '<button class="btn gray" style="margin-top:6px;padding:9px 0" onclick="viewResignFile(\'' + x.id + '\')">📎 View attachment</button><div id="rf_' + x.id + '"></div>' : '<div class="note">No attachment.</div>');
+        (x.hasFile ? '<button class="btn gray" style="margin-top:6px;padding:9px 0" onclick="viewResignFile(\'' + x.id + '\')">📎 View attachment</button><div id="rf_' + x.id + '"></div>' : '<div class="note">No attachment.</div>') +
+        (x.status === 'APPROVED' ? '<button class="btn" style="margin-top:6px;padding:9px 0" onclick="adminExitUI(\'' + x.staffId + '\',\'' + x.id + '\')">📋 Exit forms (interview &amp; clearance)</button><div id="ax_' + x.id + '"></div>' : '');
     }
     function viewResignFile(id) {
       const box = $('rf_' + id); box.innerHTML = '<div class="note">Loading attachment…</div>';
