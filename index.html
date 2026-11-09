@@ -347,6 +347,12 @@
           <button class="sbtn" onclick="loadExit()">Open my exit forms</button>
           <div id="exitOut"></div>
         </div>
+        <div class="wsched" id="supCard" style="display:none">
+          <h2>🧾 Exit clearance to check</h2>
+          <div class="hint">As store supervisor, check the company items returned by the leaving staff member and sign. The admin approves after you. Enter your code above first.</div>
+          <button class="sbtn" onclick="loadSupExits()">Open exit clearance</button>
+          <div id="supOut"></div>
+        </div>
       </section>
 
       <section class="tab" id="sSch">
@@ -1263,6 +1269,8 @@
         const msgs = [];
         if (n.newPayslips) msgs.push('🔔 Your payslip is ready. Please check and accept it under <b>My Payslips</b>.');
         $('exitCard').style.display = n.exitPending ? 'block' : 'none';
+        $('supCard').style.display = n.supTodo ? 'block' : 'none';
+        if (n.supTodo) msgs.push('🧾 ' + n.supTodo.count + ' exit clearance(s) waiting for your check (Requests tab → Exit clearance to check).');
         if (n.exitPending) msgs.push('📋 Please complete your <b>exit forms</b> (Requests tab → Exit forms) before accepting your final payslip.');
         if (n.requestUpdates) msgs.push('🔔 The admin answered your request. Tap <b>My requests</b> to see it.');
         $('staffNotice').innerHTML = msgs.join('<br>');
@@ -1302,12 +1310,12 @@
       const temp = x.type === 'TEMP';
       const info = temp
         ? '<span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:11px">TEMPORARY</span> ' + peso(x.dailyRate) + '/day · ' + esc(x.from) + ' to ' + esc(x.to) + '<br>Uses ' + (x.hostName ? esc(x.hostName) + '’s phone' : '<b style="color:#b00020">no phone assigned</b>')
-        : peso(x.rate) + '/hr · Phone: ' + (x.hasPhone ? 'registered' : '<span style="color:#b45309">not registered</span>');
+        : peso(x.rate) + '/hr · Phone: ' + (x.hasPhone ? 'registered' : '<span style="color:#b45309">not registered</span>') + (x.supervisor ? ' · <b style="color:var(--pink)">⭐ Store supervisor</b>' : '');
       const b = (label, fn, cls) => '<button class="btn ' + (cls || 'gray') + '" style="margin:4px 4px 0 0;padding:6px 10px;width:auto;font-size:12px" onclick="' + fn + '">' + label + '</button>';
       return '<div style="border:1px solid #e3e8ef;border-radius:10px;padding:8px 10px;margin:6px 0;' + (x.active ? '' : 'opacity:.6') + '">' +
         '<b>' + esc(x.name) + '</b> <span style="color:#889;font-size:12px">' + esc(x.id) + '</span><div style="font-size:12px;color:#445;margin-top:2px">' + info + '</div>' +
         '<div>' + (x.active
-          ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🔑 New code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
+          ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🔑 New code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + (temp ? '' : b(x.supervisor ? '⭐ Remove supervisor' : '⭐ Make supervisor', "stSup('" + x.id + "'," + (!x.supervisor) + ")")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
           : b('Re-activate', "stSetActive('" + x.id + "',true)")) + '</div>' +
         '<div id="stEd_' + esc(x.id) + '"></div></div>';
     }
@@ -1581,6 +1589,59 @@
         .catch(e => alert('Connection error — NOT sent. Please try again. (' + e.message + ')'));
     }
 
+
+    // ---- store supervisor: check exit clearance ----
+    let supList = [];
+    function loadSupExits() {
+      const a = needPin('supOut'); if (!a) return;
+      $('supOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
+      api('supexits', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (!r.ok) { $('supOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        supList = r.exits || [];
+        if (!supList.length) { $('supOut').innerHTML = '<div class="hint">No exit clearance to check right now.</div>'; return; }
+        $('supOut').innerHTML = supList.map((x, i) => supExitHtml(x, i)).join('');
+        supList.forEach((x, i) => { if (!x.approvedAt) setTimeout(() => sigInit('sps_' + i), 60); });
+      }).catch(e => { $('supOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function supExitHtml(x, i) {
+      const d = x.clearance || {}, ret = d.returned || EXIT_RETURNED.map(t => ({ item: t, status: '', remarks: '' })), rec = d.received || EXIT_RECEIVED.map(t => ({ item: t, received: false, remarks: '' }));
+      const f = (k, label, v, type) => '<div class="mini">' + label + '</div><input type="' + (type || 'text') + '" id="spc_' + i + '_' + k + '" value="' + esc(v || '') + '"' + (x.approvedAt ? ' disabled' : '') + '>';
+      const chip = x.approvedAt ? '<span class="chip a">Approved by admin ' + esc(x.approvedAt) + '</span>' : x.supAt ? '<span class="chip p">Checked ' + esc(x.supAt) + ' – waiting for admin</span>' : '<span class="chip p">To check</span>';
+      let h = '<div class="pcard"><b>' + esc(x.name) + '</b> ' + chip + '<div class="hint">Last working day: ' + esc(x.lastDay) + '</div>';
+      if (x.approvedAt) return h + '<div class="hint">The admin has approved this clearance.</div></div>';
+      h += '<div class="row2"><div>' + f('company', 'Company name', d.company || 'Life Four Cuts') + '</div><div>' + f('branch', 'Branch location', d.branch || 'Ayala Malls Serin Tagaytay') + '</div></div>' +
+        '<div class="row2"><div>' + f('position', 'Position', d.position || x.position) + '</div><div>' + f('sepType', 'Type of separation', d.sepType || 'Resignation') + '</div></div>' +
+        '<div class="row2"><div>' + f('dateHired', 'Date hired', d.dateHired || x.dateHired, 'date') + '</div><div>' + f('lastDay', 'Last working day', d.lastDay || x.lastDay, 'date') + '</div></div>' +
+        '<div class="exq"><div class="qt">Items returned by employee</div>' + ret.map((t, j) => '<div class="mini" style="margin-top:8px">' + (j + 1) + '. ' + esc(t.item) + '</div><select id="spr_' + i + '_' + j + '"><option value="">—</option><option value="RETURNED"' + (t.status === 'RETURNED' ? ' selected' : '') + '>Returned ✔</option><option value="NA"' + (t.status === 'NA' ? ' selected' : '') + '>Not applicable (N/A)</option></select><input type="text" id="sprr_' + i + '_' + j + '" placeholder="Remarks" value="' + esc(t.remarks || '') + '">').join('') + '</div>' +
+        '<div class="exq"><div class="qt">Items received by employee</div>' + rec.map((t, j) => /final pay/i.test(t.item)
+          ? '<div class="hint" style="margin-top:8px">' + (j + 1) + '. ' + esc(t.item) + ' – ticked by the admin when the final pay is given.</div>'
+          : '<label class="exopt"><input type="checkbox" id="spv_' + i + '_' + j + '"' + (t.received ? ' checked' : '') + '>' + (j + 1) + '. ' + esc(t.item) + ' – received</label><input type="text" id="spvr_' + i + '_' + j + '" placeholder="Remarks (e.g. letter reference no.)" value="' + esc(t.remarks || '') + '">').join('') + '</div>' +
+        '<div class="exq">' + sigPadHtml('sps_' + i, x.supAt ? 'Your signature is on file – sign again only to replace it' : 'Your signature (Checked and verified by)') + '</div>' +
+        '<button class="sbtn green" onclick="supSaveUI(' + i + ')">' + (x.supAt ? 'Update check' : 'Save &amp; sign check') + '</button></div>';
+      return h;
+    }
+    function supSaveUI(i) {
+      const a = needPin('supOut'); if (!a) return;
+      const x = supList[i], d0 = x.clearance || {};
+      const g = k => ($('spc_' + i + '_' + k) || {}).value || '';
+      const recItems = (d0.received || EXIT_RECEIVED.map(t => ({ item: t, received: false, remarks: '' })));
+      const data = { company: g('company'), branch: g('branch'), name: x.name, position: g('position'), empNo: x.staffId, sepType: g('sepType'), dateHired: g('dateHired'), lastDay: g('lastDay'),
+        returned: (d0.returned || EXIT_RETURNED.map(t => ({ item: t }))).map((t, j) => ({ item: t.item, status: $('spr_' + i + '_' + j).value, remarks: $('sprr_' + i + '_' + j).value.trim() })),
+        received: recItems.map((t, j) => /final pay/i.test(t.item) ? t : ({ item: t.item, received: $('spv_' + i + '_' + j).checked, remarks: $('spvr_' + i + '_' + j).value.trim() })) };
+      if (data.returned.some(t => !t.status)) return alert('Please mark every returned item as Returned or N/A.');
+      const sig = sigData('sps_' + i);
+      if (!sig && !x.supAt) return alert('Please sign in the signature box.');
+      if (!confirm('Save your check of ' + x.name + "'s exit clearance? The admin will approve it next.")) return;
+      api('supclear', { staffId: a.s.id, pin: a.pin, target: x.staffId, data: data, signature: sig }, 90000).then(r => { alert((r.ok ? '✅ ' : '❌ ') + r.message); if (r.ok) { loadSupExits(); refreshNotices(); } })
+        .catch(e => alert('Connection error — NOT saved. Please try again. (' + e.message + ')'));
+    }
+    function stSup(id, on) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!confirm(on ? 'Make ' + x.name + ' the store supervisor? They will be able to check exit clearances in their app.' : 'Remove the store supervisor role from ' + x.name + '?')) return;
+      adminCall('setSupervisor', { id: id, on: on }).then(r => { amsg('stMsg', r.message, r.ok); if (r.ok) loadAdminStaff(); })
+        .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
+    }
+
     // ---- admin side ----
     const axData = {};
     function adminExitUI(staffId, reqId) {
@@ -1604,7 +1665,8 @@
       }
       const d = r.clearance || {}, ret = d.returned || EXIT_RETURNED.map(x => ({ item: x, status: '', remarks: '' })), rec = d.received || EXIT_RECEIVED.map(x => ({ item: x, received: false, remarks: '' }));
       const f = (k, label, v, type) => '<div class="mini">' + label + '</div><input type="' + (type || 'text') + '" id="axc_' + id + '_' + k + '" value="' + esc(v || '') + '">';
-      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (r.ackAt ? '<span class="chip a">Signed by staff ' + esc(r.ackAt) + '</span>' : r.verifiedAt ? '<span class="chip p">Waiting for staff signature</span>' : '<span class="chip p">Fill in &amp; verify</span>') +
+      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (r.ackAt ? '<span class="chip a">Signed by staff ' + esc(r.ackAt) + '</span>' : r.verifiedAt ? '<span class="chip p">Waiting for staff signature</span>' : r.supAt ? '<span class="chip p">Checked by supervisor – please approve</span>' : '<span class="chip p">Fill in &amp; verify</span>') +
+        (r.supAt ? '<div class="note" style="margin-top:6px">✔ Checked and signed by <b>' + esc(r.supName) + '</b> (Store Supervisor) on ' + esc(r.supAt) + '. Review it, tick Final Pay when given, then approve below.</div>' : '') +
         '<div class="row2"><div>' + f('company', 'Company name', d.company || 'Life Four Cuts') + '</div><div>' + f('branch', 'Branch location', d.branch || 'Ayala Malls Serin Tagaytay') + '</div></div>' +
         '<div class="row2"><div>' + f('name', 'Employee name', d.name || r.name) + '</div><div>' + f('position', 'Position', d.position || inf.position) + '</div></div>' +
         '<div class="row2"><div>' + f('empNo', 'Employee no.', d.empNo || r.staffId) + '</div><div>' + f('sepType', 'Type of separation', d.sepType || 'Resignation') + '</div></div>' +
@@ -1613,7 +1675,7 @@
         '<h4>Items received by employee</h4>' + rec.map((x, i) => '<label class="exopt"><input type="checkbox" id="axv_' + id + '_' + i + '"' + (x.received ? ' checked' : '') + '>' + (i + 1) + '. ' + esc(x.item) + ' – received</label><input type="text" id="axvr_' + id + '_' + i + '" placeholder="Remarks' + (i === 0 ? ' (letter reference no.)' : '') + '" value="' + esc(x.remarks || '') + '" style="margin-top:4px">').join('') +
         '<h4>L4C Management Approval</h4>' + f('mgmt', 'Checked and verified by (management name)', d.mgmtName) +
         '<div class="note">' + (r.hasMgmtSig ? 'Your signature is on file. Sign below only to replace it.' : 'Sign below as management.') + '</div>' + sigPadHtml('axs_' + id, 'Management signature') +
-        '<button class="btn green" style="margin-top:8px" onclick="adminSaveClearanceUI(\'' + r.staffId + '\',\'' + id + '\')">Save &amp; verify clearance</button>' +
+        '<button class="btn green" style="margin-top:8px" onclick="adminSaveClearanceUI(\'' + r.staffId + '\',\'' + id + '\')">Approve &amp; sign clearance</button>' +
         (r.hasClrPdf ? '<button class="btn gray" style="margin-top:6px;padding:9px 0" onclick="adminExitPdfUI(\'' + r.staffId + '\',\'clearance\',\'axp2_' + id + '\')">📄 Exit Clearance PDF</button><div id="axp2_' + id + '"></div>' : '') + '</div>';
       return h;
     }
