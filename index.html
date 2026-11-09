@@ -1513,22 +1513,24 @@
       return '<div style="font-size:13px;margin-top:8px">' + esc(d.name || '') + ' · ' + esc(d.position || '') + ' · ' + esc(d.sepType || '') + '<br>Date hired: ' + esc(d.dateHired || '—') + ' · Last working day: ' + esc(d.lastDay || '') + '</div>' +
         '<table><tr><th>Items returned</th><th>Status</th><th>Remarks</th></tr>' + (d.returned || []).map(x => '<tr><td>' + esc(x.item) + '</td><td>' + st(x.status) + '</td><td>' + esc(x.remarks || '') + '</td></tr>').join('') + '</table>' +
         '<table><tr><th>Items received</th><th>Received</th><th>Remarks</th></tr>' + (d.received || []).map(x => '<tr><td>' + esc(x.item) + '</td><td>' + (x.received ? '✅' : '—') + '</td><td>' + esc(x.remarks || '') + '</td></tr>').join('') + '</table>' +
-        '<div style="font-size:12px;margin-top:6px">Checked and verified by: <b>' + esc(d.mgmtName || '') + '</b></div>';
+        (d.mgmtName ? '<div style="font-size:12px;margin-top:6px">Approved by: <b>' + esc(d.mgmtName) + '</b></div>' : '');
     }
     function renderExit() {
       const x = exitData; let h = '';
       h += '<div class="pcard"><b>1. Exit Interview Form</b> ' + (x.interviewAt ? '<span class="chip a">Submitted ' + esc(x.interviewAt) + '</span>' : '<span class="chip p">To do</span>');
       if (!x.interviewAt) h += '<button class="sbtn" onclick="openInterview()">Fill in the Exit Interview</button><div id="intForm"></div>';
-      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (x.ackAt ? '<span class="chip a">Signed ' + esc(x.ackAt) + '</span>' : x.verifiedAt ? '<span class="chip p">Please review and sign</span>' : '<span class="chip p">Waiting for the admin</span>');
-      if (x.verifiedAt && x.clearance) {
-        h += clearanceViewHtml(x.clearance);
+      const ready = !!(x.verifiedAt || x.supAt);
+      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (x.ackAt ? '<span class="chip a">Countersigned ' + esc(x.ackAt) + '</span>' + (x.verifiedAt ? ' <span class="chip a">Approved by admin</span>' : ' <span class="chip p">Waiting for admin approval</span>') : ready ? '<span class="chip p">Please review and countersign</span>' : '<span class="chip p">Waiting for the store supervisor</span>');
+      if (ready && x.clearance) {
+        h += clearanceViewHtml(x.clearance) + (x.supName ? '<div style="font-size:12px;margin-top:4px">Checked by: <b>' + esc(x.supName) + '</b> (Store Supervisor) ' + esc(x.supAt || '') + '</div>' : '');
         if (!x.ackAt) h += '<div class="hint" style="margin-top:8px"><b>Employee Acknowledgment:</b> I hereby certify that the above information is true and that I have returned all company properties under my responsibility. I understand that any pending obligations may be deducted from my final pay.</div>' +
-          sigPadHtml('sigAck') + '<button class="sbtn green" onclick="submitAckUI()">Sign &amp; submit</button>';
-      } else if (!x.verifiedAt) h += '<div class="hint">Return all company items (ID/lanyard, uniform, apron, keys) to the admin. The admin will prepare your clearance, then you sign it here.</div>';
+          sigPadHtml('sigAck', 'Your countersignature (sign with your finger)') + '<button class="sbtn green" onclick="submitAckUI()">Countersign &amp; submit</button>';
+      } else if (!ready) h += '<div class="hint">Return all company items (ID/lanyard, uniform, apron, keys). The store supervisor will check them, then you countersign here.</div>';
       h += '</div>';
-      if (x.interviewAt && x.ackAt) h += '<div class="hint" style="margin-top:8px">✅ All exit forms are complete. You can now accept your final payslip in the Payslips tab.</div>';
+      if (x.interviewAt && x.ackAt && x.verifiedAt) h += '<div class="hint" style="margin-top:8px">✅ All exit forms are complete. You can now accept your final payslip in the Payslips tab.</div>';
+      else if (x.interviewAt && x.ackAt) h += '<div class="hint" style="margin-top:8px">⏳ Thank you! The admin will give the final approval, then you can accept your final payslip.</div>';
       $('exitOut').innerHTML = h;
-      if (x.verifiedAt && !x.ackAt) setTimeout(() => sigInit('sigAck'), 60);
+      if (ready && !x.ackAt) setTimeout(() => sigInit('sigAck'), 60);
     }
     function openInterview() {
       const x = exitData, box = $('intForm'); if (!box) return;
@@ -1606,9 +1608,9 @@
     function supExitHtml(x, i) {
       const d = x.clearance || {}, ret = d.returned || EXIT_RETURNED.map(t => ({ item: t, status: '', remarks: '' })), rec = d.received || EXIT_RECEIVED.map(t => ({ item: t, received: false, remarks: '' }));
       const f = (k, label, v, type) => '<div class="mini">' + label + '</div><input type="' + (type || 'text') + '" id="spc_' + i + '_' + k + '" value="' + esc(v || '') + '"' + (x.approvedAt ? ' disabled' : '') + '>';
-      const chip = x.approvedAt ? '<span class="chip a">Approved by admin ' + esc(x.approvedAt) + '</span>' : x.supAt ? '<span class="chip p">Checked ' + esc(x.supAt) + ' – waiting for admin</span>' : '<span class="chip p">To check</span>';
+      const chip = x.approvedAt ? '<span class="chip a">Approved by admin ' + esc(x.approvedAt) + '</span>' : x.ackAt ? '<span class="chip a">Countersigned by staff – admin approves next</span>' : x.supAt ? '<span class="chip p">Checked ' + esc(x.supAt) + ' – waiting for staff countersign</span>' : '<span class="chip p">To check</span>';
       let h = '<div class="pcard"><b>' + esc(x.name) + '</b> ' + chip + '<div class="hint">Last working day: ' + esc(x.lastDay) + '</div>';
-      if (x.approvedAt) return h + '<div class="hint">The admin has approved this clearance.</div></div>';
+      if (x.approvedAt || x.ackAt) return h + '<div class="hint">' + (x.approvedAt ? 'The admin has approved this clearance.' : 'The staff member has countersigned. The admin will approve next.') + '</div></div>';
       h += '<div class="row2"><div>' + f('company', 'Company name', d.company || 'Life Four Cuts') + '</div><div>' + f('branch', 'Branch location', d.branch || 'Ayala Malls Serin Tagaytay') + '</div></div>' +
         '<div class="row2"><div>' + f('position', 'Position', d.position || x.position) + '</div><div>' + f('sepType', 'Type of separation', d.sepType || 'Resignation') + '</div></div>' +
         '<div class="row2"><div>' + f('dateHired', 'Date hired', d.dateHired || x.dateHired, 'date') + '</div><div>' + f('lastDay', 'Last working day', d.lastDay || x.lastDay, 'date') + '</div></div>' +
@@ -1631,7 +1633,7 @@
       if (data.returned.some(t => !t.status)) return alert('Please mark every returned item as Returned or N/A.');
       const sig = sigData('sps_' + i);
       if (!sig && !x.supAt) return alert('Please sign in the signature box.');
-      if (!confirm('Save your check of ' + x.name + "'s exit clearance? The admin will approve it next.")) return;
+      if (!confirm('Save your check of ' + x.name + "'s exit clearance? " + x.name.split(' ')[0] + ' will countersign next, then the admin approves.')) return;
       api('supclear', { staffId: a.s.id, pin: a.pin, target: x.staffId, data: data, signature: sig }, 90000).then(r => { alert((r.ok ? '✅ ' : '❌ ') + r.message); if (r.ok) { loadSupExits(); refreshNotices(); } })
         .catch(e => alert('Connection error — NOT saved. Please try again. (' + e.message + ')'));
     }
@@ -1665,7 +1667,7 @@
       }
       const d = r.clearance || {}, ret = d.returned || EXIT_RETURNED.map(x => ({ item: x, status: '', remarks: '' })), rec = d.received || EXIT_RECEIVED.map(x => ({ item: x, received: false, remarks: '' }));
       const f = (k, label, v, type) => '<div class="mini">' + label + '</div><input type="' + (type || 'text') + '" id="axc_' + id + '_' + k + '" value="' + esc(v || '') + '">';
-      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (r.ackAt ? '<span class="chip a">Signed by staff ' + esc(r.ackAt) + '</span>' : r.verifiedAt ? '<span class="chip p">Waiting for staff signature</span>' : r.supAt ? '<span class="chip p">Checked by supervisor – please approve</span>' : '<span class="chip p">Fill in &amp; verify</span>') +
+      h += '</div><div class="pcard"><b>2. Exit Clearance Checklist</b> ' + (r.ackAt ? '<span class="chip a">Countersigned by staff ' + esc(r.ackAt) + '</span>' + (r.verifiedAt ? '' : ' <span class="chip p">Please approve</span>') : r.verifiedAt ? '<span class="chip p">Waiting for staff countersign</span>' : r.supAt ? '<span class="chip p">Checked by supervisor – waiting for staff countersign</span>' : '<span class="chip p">Fill in &amp; verify</span>') +
         (r.supAt ? '<div class="note" style="margin-top:6px">✔ Checked and signed by <b>' + esc(r.supName) + '</b> (Store Supervisor) on ' + esc(r.supAt) + '. Review it, tick Final Pay when given, then approve below.</div>' : '') +
         '<div class="row2"><div>' + f('company', 'Company name', d.company || 'Life Four Cuts') + '</div><div>' + f('branch', 'Branch location', d.branch || 'Ayala Malls Serin Tagaytay') + '</div></div>' +
         '<div class="row2"><div>' + f('name', 'Employee name', d.name || r.name) + '</div><div>' + f('position', 'Position', d.position || inf.position) + '</div></div>' +
