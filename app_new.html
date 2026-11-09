@@ -370,7 +370,7 @@
         <div class="wsched">
           <h2>🏦 Bank deposit</h2>
           <div class="hint">One deposit per sales date. Upload the deposit slip photo and enter the amount.</div>
-          <div class="mini">For sales date</div><select id="dpSales"><option value="">— Pick the sales date —</option></select>
+          <div class="mini">For sales date</div><select id="dpSales" onfocus="if (this.options.length < 2) loadSales()"><option value="">— Tap to load the sales dates —</option></select>
           <div class="mini">Deposit date</div><input type="date" id="dpDate">
           <div class="mini">Deposit amount (₱)</div><input type="text" id="dpAmount" inputmode="decimal" placeholder="e.g. 12,450.00">
           <div class="mini">Bank reference no. (optional)</div><input type="text" id="dpRef" maxlength="60">
@@ -378,8 +378,9 @@
           <button class="sbtn green" onclick="depositSubmitUI()">Submit deposit</button>
         </div>
         <div class="wsched">
-          <h2>🗂 Last 14 days</h2>
-          <button class="sbtn gray" onclick="loadSales()">Show sales &amp; deposits</button>
+          <h2>↩️ Returned to you</h2>
+          <div class="hint">Submitted reports and deposits go straight to the admin and can't be viewed here. If the admin returns one to you, it shows here with the admin's note so you can submit it again.</div>
+          <button class="sbtn gray" onclick="loadSales()">Check returned items &amp; deposit dates</button>
           <div id="slOut"></div>
         </div>
       </section>
@@ -471,7 +472,7 @@
 
         <div class="card" id="tabSales" style="display:none">
           <b>Daily sales &amp; deposits</b>
-          <div class="note">Each day the store was open: the staff's sales report, the bank deposit for that sales date, and whether they match. Tap Verify when it checks out.</div>
+          <div class="note">Each day the store was open: the staff's sales report, the bank deposit for that sales date, and whether they match. Only you can see these. Verify, ✏️ edit, or ↩️ return an entry to the staff member with a note.</div>
           <div class="row"><input type="month" id="aslMonth"><button class="btn" style="margin-top:0" onclick="loadAdminSales()">Show</button></div>
           <div class="amsg" id="aslMsg"></div>
           <div id="aslOut" class="note">Pick a month and tap Show.</div>
@@ -1312,6 +1313,8 @@
         if (n.newPayslips) msgs.push('🔔 Your payslip is ready. Please check and accept it under <b>My Payslips</b>.');
         $('exitCard').style.display = n.exitPending ? 'block' : 'none';
         $('supCard').style.display = n.supTodo ? 'block' : 'none';
+        badge('bdgSal', n.salesReturned || 0);
+        if (n.salesReturned) msgs.push('↩️ The admin returned ' + n.salesReturned + ' of your sales/deposit entr' + (n.salesReturned > 1 ? 'ies' : 'y') + '. Open the Sales tab → Returned to you.');
         if (n.supTodo) msgs.push('🧾 ' + n.supTodo.count + ' exit clearance(s) waiting for your check (Requests tab → Exit clearance to check).');
         if (n.exitPending) msgs.push('📋 Please complete your <b>exit forms</b> (Requests tab → Exit forms) before accepting your final payslip.');
         if (n.requestUpdates) msgs.push('🔔 The admin answered your request. Tap <b>My requests</b> to see it.');
@@ -1512,12 +1515,11 @@
       api('salesget', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
         if (!r.ok) { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         const sel = $('dpSales'), keep = sel.value;
-        sel.innerHTML = '<option value="">— Pick the sales date —</option>' + (r.undeposited || []).map(x => '<option value="' + x.date + '">' + x.date + ' · sales ' + pesoStr(x.total) + '</option>').join('');
+        sel.innerHTML = '<option value="">— Pick the sales date —</option>' + (r.depositDates || []).map(d => '<option value="' + d + '">' + d + '</option>').join('');
         if (keep) sel.value = keep;
-        $('slOut').innerHTML = '<table><tr><th>Date</th><th class="r">Sales</th><th class="r">Deposit</th><th>Status</th></tr>' + r.recent.map(x => {
-          let st = x.total == null ? '<span style="color:var(--sub)">no report</span>' : x.deposit == null ? '⏳ not deposited' : Math.abs(x.deposit - x.total) < 0.5 ? '✅' : (x.deposit < x.total ? '⚠️ short ' : '⚠️ over ') + pesoStr(Math.abs(x.deposit - x.total));
-          return '<tr><td>' + esc(x.date.slice(5)) + '</td><td class="r">' + (x.total == null ? '—' : pesoStr(x.total)) + '</td><td class="r">' + (x.deposit == null ? '—' : pesoStr(x.deposit)) + '</td><td style="font-size:11px">' + st + '</td></tr>';
-        }).join('') + '</table>';
+        const ret = r.returned || [];
+        $('slOut').innerHTML = ret.length ? ret.map(x => '<div class="pcard"><b>' + (x.kind === 'deposit' ? '🏦 Deposit for sales date ' : '📊 Sales report for ') + esc(x.date) + '</b> <span class="chip d">Returned</span><div style="font-size:13px;margin-top:4px"><b>Admin:</b> ' + esc(x.note || '') + '</div><div class="hint">Please submit it again above' + (x.kind === 'deposit' ? ' (pick ' + esc(x.date) + ' as the sales date).' : ' with the same sales date.') + '</div></div>').join('')
+          : '<div class="hint" style="margin-top:8px">✅ Nothing returned to you.' + ((r.depositDates || []).length ? ' Sales dates waiting for a deposit are loaded in the deposit form.' : '') + '</div>';
       }).catch(e => { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
     }
     function salesSubmitUI() {
@@ -1530,14 +1532,13 @@
       $('slOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
       readAttachment(f).then(file => api('salessubmit', { staffId: a.s.id, pin: a.pin, date: date, total: total, notes: $('slNotes').value.trim(), file: file }, 120000)).then(r => {
         alert((r.ok ? '✅ ' : '❌ ') + r.message);
-        if (r.ok) { $('slTotal').value = ''; $('slFile').value = ''; $('slNotes').value = ''; }
-        loadSales();
+        if (r.ok) { $('slTotal').value = ''; $('slFile').value = ''; $('slNotes').value = ''; $('slOut').innerHTML = ''; refreshNotices(); } else $('slOut').innerHTML = '';
       }).catch(e => { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Not sent: ' + esc(e.message) + '</div>'; });
     }
     function depositSubmitUI() {
       const a = needPin('slOut'); if (!a) return;
       const sd = $('dpSales').value, dd = $('dpDate').value, amt = moneyIn($('dpAmount').value), f = $('dpFile').files[0];
-      if (!sd) return alert('Pick the sales date this deposit is for (tap "Show sales & deposits" if the list is empty).');
+      if (!sd) return alert('Pick the sales date this deposit is for (enter your code, then tap the date list to load it).');
       if (!dd) return alert('Pick the deposit date.');
       if (!(amt > 0)) return alert('Enter the deposit amount.');
       if (!f) return alert('Attach the photo of the deposit slip.');
@@ -1545,8 +1546,7 @@
       $('slOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
       readAttachment(f).then(file => api('depositsubmit', { staffId: a.s.id, pin: a.pin, salesDate: sd, depositDate: dd, amount: amt, ref: $('dpRef').value.trim(), file: file }, 120000)).then(r => {
         alert((r.ok ? '✅ ' : '❌ ') + r.message);
-        if (r.ok) { $('dpAmount').value = ''; $('dpFile').value = ''; $('dpRef').value = ''; $('dpSales').value = ''; }
-        loadSales();
+        if (r.ok) { $('dpAmount').value = ''; $('dpFile').value = ''; $('dpRef').value = ''; $('dpSales').innerHTML = '<option value="">— Tap to load the sales dates —</option>'; $('slOut').innerHTML = ''; refreshNotices(); } else $('slOut').innerHTML = '';
       }).catch(e => { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Not sent: ' + esc(e.message) + '</div>'; });
     }
 
@@ -1562,15 +1562,46 @@
         if (!r.days.length) h += '<div class="note">No sales or open days in this month.</div>';
         r.days.forEach(d => {
           const S = d.sales, D = d.deposit;
+          const chipOf = X => X.status === 'VERIFIED' ? ' <span class="chip a">Verified</span>' : X.status === 'RETURNED' ? ' <span class="chip d">Returned to staff</span>' : ' <span class="chip p">Submitted</span>';
+          const btn = (label, fn, cls) => '<button class="btn ' + (cls || 'gray') + '" style="margin-top:4px;padding:8px 0;font-size:12.5px" onclick="' + fn + '">' + label + '</button>';
+          const tools = (kind, X) => '<div class="row">' + btn(kind === 'sales' ? '🖼 Screenshot' : '🧾 Slip', "salesFileUI('" + kind + "','" + d.date + "')") + btn('✏️ Edit', "salesEditUI('" + kind + "','" + d.date + "')") +
+            (X.status === 'VERIFIED' ? btn('Un-verify', "salesVerifyUI('" + kind + "','" + d.date + "',false)") : btn('Verify', "salesVerifyUI('" + kind + "','" + d.date + "',true)", 'green')) + btn('↩️ Return', "salesReturnUI('" + kind + "','" + d.date + "')", 'red') + '</div>' +
+            '<div id="sle_' + kind + '_' + d.date + '"></div><div id="slf_' + kind + '_' + d.date + '"></div>';
           h += '<div class="pcard"><b>' + esc(d.date) + '</b> ' + stChip(d.status) + (d.diff != null && Math.abs(d.diff) >= 0.5 ? ' <b style="color:#e11d48">' + (d.diff < 0 ? '−' : '+') + pesoStr(Math.abs(d.diff)) + '</b>' : '') +
-            '<div style="margin-top:6px;font-size:13px"><b>📊 Sales:</b> ' + (S ? pesoStr(S.total) + ' · by ' + esc(S.name) + ' · ' + esc(S.at) + (S.verifiedAt ? ' <span class="chip a">Verified</span>' : '') + (S.notes ? '<div class="note">Note: ' + esc(S.notes) + '</div>' : '') : '<span style="color:var(--sub)">no report</span>') + '</div>' +
-            (S ? '<div class="row"><button class="btn gray" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesFileUI(\'sales\',\'' + d.date + '\')">🖼 Screenshot</button><button class="btn ' + (S.verifiedAt ? 'gray' : 'green') + '" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesVerifyUI(\'sales\',\'' + d.date + '\',' + (!S.verifiedAt) + ')">' + (S.verifiedAt ? 'Re-open' : 'Verify') + '</button></div><div id="slf_sales_' + d.date + '"></div>' : '') +
-            '<div style="margin-top:8px;font-size:13px"><b>🏦 Deposit:</b> ' + (D ? pesoStr(D.amount) + ' · deposited ' + esc(D.depDate) + (D.ref ? ' · ref ' + esc(D.ref) : '') + ' · by ' + esc(D.name) + (D.verifiedAt ? ' <span class="chip a">Verified</span>' : '') : '<span style="color:var(--sub)">none yet</span>') + '</div>' +
-            (D ? '<div class="row"><button class="btn gray" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesFileUI(\'deposit\',\'' + d.date + '\')">🧾 Deposit slip</button><button class="btn ' + (D.verifiedAt ? 'gray' : 'green') + '" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesVerifyUI(\'deposit\',\'' + d.date + '\',' + (!D.verifiedAt) + ')">' + (D.verifiedAt ? 'Re-open' : 'Verify') + '</button></div><div id="slf_deposit_' + d.date + '"></div>' : '') + '</div>';
+            '<div style="margin-top:6px;font-size:13px"><b>📊 Sales:</b> ' + (S ? pesoStr(S.total) + ' · by ' + esc(S.name) + ' · ' + esc(S.at) + chipOf(S) + (S.notes ? '<div class="note">Staff note: ' + esc(S.notes) + '</div>' : '') + (S.note ? '<div class="note">Admin note: ' + esc(S.note) + '</div>' : '') : '<span style="color:var(--sub)">no report</span>') + '</div>' +
+            (S ? tools('sales', S) : '') +
+            '<div style="margin-top:8px;font-size:13px"><b>🏦 Deposit:</b> ' + (D ? pesoStr(D.amount) + ' · deposited ' + esc(D.depDate) + (D.ref ? ' · ref ' + esc(D.ref) : '') + ' · by ' + esc(D.name) + chipOf(D) + (D.note ? '<div class="note">Admin note: ' + esc(D.note) + '</div>' : '') : '<span style="color:var(--sub)">none yet</span>') + '</div>' +
+            (D ? tools('deposit', D) : '') + '</div>';
         });
         $('aslOut').innerHTML = h;
         refreshNotices();
       }).catch(e => { $('aslOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+
+    function salesFind(kind, date) { const d = (aslData && aslData.days || []).find(x => x.date === date); return d ? (kind === 'deposit' ? d.deposit : d.sales) : null; }
+    function salesEditUI(kind, date) {
+      const box = $('sle_' + kind + '_' + date); if (!box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      const X = salesFind(kind, date) || {};
+      box.innerHTML = kind === 'sales'
+        ? '<div class="mini" style="margin-top:6px">Total sales (₱)</div><input type="text" id="sev_total_' + date + '" value="' + (X.total != null ? X.total : '') + '"><div class="mini">Staff notes</div><input type="text" id="sev_notes_' + date + '" value="' + esc(X.notes || '') + '">' +
+          '<button class="btn green" style="margin-top:6px;padding:9px 0" onclick="salesEditSave(\'sales\',\'' + date + '\')">Save changes</button>'
+        : '<div class="mini" style="margin-top:6px">Deposit amount (₱)</div><input type="text" id="sev_amount_' + date + '" value="' + (X.amount != null ? X.amount : '') + '"><div class="mini">Deposit date</div><input type="date" id="sev_dep_' + date + '" value="' + esc(X.depDate || '') + '"><div class="mini">Bank reference</div><input type="text" id="sev_ref_' + date + '" value="' + esc(X.ref || '') + '">' +
+          '<button class="btn green" style="margin-top:6px;padding:9px 0" onclick="salesEditSave(\'deposit\',\'' + date + '\')">Save changes</button>';
+    }
+    function salesEditSave(kind, date) {
+      const body = kind === 'sales' ? { kind: kind, date: date, total: moneyIn($('sev_total_' + date).value), notes: $('sev_notes_' + date).value }
+        : { kind: kind, date: date, amount: moneyIn($('sev_amount_' + date).value), depDate: $('sev_dep_' + date).value, ref: $('sev_ref_' + date).value };
+      amsg('aslMsg', 'Saving…', true);
+      adminCall('salesEdit', body).then(r => { amsg('aslMsg', r.message, r.ok); if (r.ok) loadAdminSales(); }).catch(e => amsg('aslMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function salesReturnUI(kind, date) {
+      const X = salesFind(kind, date) || {};
+      const note = prompt('Return this ' + (kind === 'deposit' ? 'deposit' : 'sales report') + ' (' + date + ') to ' + (X.name || 'the staff') + '. What should they correct?');
+      if (note === null) return;
+      if (!note.trim()) return alert('Please write a note.');
+      amsg('aslMsg', 'Returning…', true);
+      adminCall('salesReturn', { kind: kind, date: date, note: note.trim() }).then(r => { amsg('aslMsg', r.message, r.ok); if (r.ok) loadAdminSales(); }).catch(e => amsg('aslMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
     function salesVerifyUI(kind, date, verified) {
       amsg('aslMsg', 'Saving…', true);
