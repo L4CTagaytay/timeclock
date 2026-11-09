@@ -205,7 +205,8 @@
     html.dark .switch input:checked + .sl { background: var(--pink); }
     .sigpad { width: 100%; height: 160px; background: #fff; border: 1.5px dashed #b9b9c6; border-radius: 12px; touch-action: none; display: block; margin-top: 6px; }
     .exq { margin-top: 14px; } .exq .qt { font-weight: 700; font-size: 14px; } .exq .qh { font-size: 12px; color: var(--sub); margin-top: 2px; }
-    .exopt { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; margin-top: 6px; } .exopt input { width: auto; margin-top: 3px; flex: none; }
+    label.exopt { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; font-weight: 500; color: var(--ink); text-transform: none; letter-spacing: 0; margin: 8px 0 0; line-height: 1.35; cursor: pointer; }
+    .wsched input.eiR, .wsched input.eiM, .wsched input[type=radio], .exopt input { -webkit-appearance: auto; appearance: auto; width: 20px; height: 20px; min-width: 20px; padding: 0; margin: 0; flex: none; accent-color: var(--pink); background: none; border: 0; }
     .deact { position: fixed; inset: 0; z-index: 200; background: #0b0b0e; color: #fff; display: none; align-items: center; justify-content: center; padding: 32px; text-align: center; }
     .deact .dic { font-size: 68px; } .deact .dt { font-size: 25px; font-weight: 800; margin: 12px 0 6px; } .deact .dn { font-size: 16px; color: #ff4d8d; font-weight: 700; }
     .deact .ds { font-size: 14px; color: #c9c9d6; margin-top: 12px; line-height: 1.55; } .deact img { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 8px; }
@@ -1595,7 +1596,7 @@
       if (r.interviewAt) {
         h += '<details style="margin-top:6px"><summary style="cursor:pointer;font-weight:700;font-size:13px">View answers</summary><div style="font-size:13px;margin-top:6px">' +
           'Position: <b>' + esc(inf.position || '') + '</b> · Date hired: <b>' + esc(inf.dateHired || '') + '</b> · Supervisor: ' + esc(inf.supervisor || '—') + '<br>Reason: ' + esc((inf.reasons || []).join(', ')) + (inf.reasonOther ? ' (' + esc(inf.reasonOther) + ')' : '') +
-          (iv.items || []).map(it => '<div style="margin-top:8px"><b>' + esc(it.n) + '. ' + esc(it.q) + '</b>' + (it.choice ? '<br>➜ ' + esc(it.choice) + (it.other ? ': ' + esc(it.other) : '') : '') + (it.text ? '<div style="white-space:pre-wrap;color:#445">' + esc(it.text) + '</div>' : '') + '</div>').join('') +
+          (iv.items || []).map(it => '<div style="margin-top:8px"><b>' + esc(it.n) + '. ' + esc(it.q) + '</b>' + (it.choice ? '<br>➜ ' + esc(it.choice) + (it.other ? ': ' + esc(it.other) : '') : '') + (it.text ? '<div style="white-space:pre-wrap;color:var(--ink);opacity:.85;margin-top:2px">' + esc(it.text) + '</div>' : '') + '</div>').join('') +
           (iv.finalComments ? '<div style="margin-top:8px"><b>Final comments:</b><div style="white-space:pre-wrap">' + esc(iv.finalComments) + '</div></div>' : '') + '</div></details>';
         if (r.hasIntPdf) h += '<button class="btn gray" style="margin-top:6px;padding:9px 0" onclick="adminExitPdfUI(\'' + r.staffId + '\',\'interview\',\'axp1_' + id + '\')">📄 Exit Interview PDF</button><div id="axp1_' + id + '"></div>';
       }
