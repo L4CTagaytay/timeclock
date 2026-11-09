@@ -82,7 +82,7 @@
     @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
     .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; justify-content: center; background: rgba(255,255,255,.92); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--line); padding: 6px 6px max(14px, env(safe-area-inset-bottom)); }
     .tabbar .in2 { display: flex; width: 100%; max-width: 440px; }
-    .tabbar button { flex: 1; background: none; color: #9a9aa6; padding: 6px 0 2px; font-size: 10.5px; font-weight: 700; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
+    .tabbar button { flex: 1; min-width: 0; letter-spacing: -.2px; background: none; color: #9a9aa6; padding: 6px 0 2px; font-size: 10.5px; font-weight: 700; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
     .tabbar button svg { width: 25px; height: 25px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
     .tabbar button.on { color: var(--pink); }
     .tabbar .badge { position: absolute; top: 0; left: 55%; margin: 0; }
@@ -355,6 +355,35 @@
         </div>
       </section>
 
+      <section class="tab" id="sSal">
+        <h1 class="big">Sales</h1>
+        <div class="idslot"></div>
+        <div class="wsched">
+          <h2>📊 Daily sales report</h2>
+          <div class="hint">Upload the screenshot of the day's sales report and enter the total. Only staff on duty that day can submit.</div>
+          <div class="mini">Sales date</div><input type="date" id="slDate">
+          <div class="mini">Total sales (₱)</div><input type="text" id="slTotal" inputmode="decimal" placeholder="e.g. 12,450.00">
+          <div class="mini">Screenshot of the daily report</div><input type="file" id="slFile" accept="image/*,application/pdf">
+          <textarea id="slNotes" rows="2" maxlength="500" placeholder="Notes (optional)"></textarea>
+          <button class="sbtn" onclick="salesSubmitUI()">Submit sales report</button>
+        </div>
+        <div class="wsched">
+          <h2>🏦 Bank deposit</h2>
+          <div class="hint">One deposit per sales date. Upload the deposit slip photo and enter the amount.</div>
+          <div class="mini">For sales date</div><select id="dpSales"><option value="">— Pick the sales date —</option></select>
+          <div class="mini">Deposit date</div><input type="date" id="dpDate">
+          <div class="mini">Deposit amount (₱)</div><input type="text" id="dpAmount" inputmode="decimal" placeholder="e.g. 12,450.00">
+          <div class="mini">Bank reference no. (optional)</div><input type="text" id="dpRef" maxlength="60">
+          <div class="mini">Photo of the deposit slip</div><input type="file" id="dpFile" accept="image/*,application/pdf">
+          <button class="sbtn green" onclick="depositSubmitUI()">Submit deposit</button>
+        </div>
+        <div class="wsched">
+          <h2>🗂 Last 14 days</h2>
+          <button class="sbtn gray" onclick="loadSales()">Show sales &amp; deposits</button>
+          <div id="slOut"></div>
+        </div>
+      </section>
+
       <section class="tab" id="sSch">
         <h1 class="big">Schedule</h1>
         <div class="idslot"></div>
@@ -373,6 +402,7 @@
         <button id="tbRec" onclick="showTab('Rec')"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Records</button>
         <button id="tbPay" onclick="showTab('Pay')"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v.01M18 15v.01"/></svg>Payslips<span id="bdgPay"></span></button>
         <button id="tbReq" onclick="showTab('Req')"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>Requests<span id="bdgReq"></span></button>
+        <button id="tbSal" onclick="showTab('Sal')"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Sales<span id="bdgSal"></span></button>
         <button id="tbSch" onclick="showTab('Sch')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Schedule</button>
       </div></nav>
     </div>
@@ -396,6 +426,7 @@
           <button id="subReq" onclick="adminTab('req')">📝 Requests<span id="bdgAReq"></span></button>
           <button id="subPsl" onclick="adminTab('psl')">✅ Payslips<span id="bdgAPsl"></span></button>
           <button id="subStaff" onclick="adminTab('staff')">👥 Staff</button>
+          <button id="subSales" onclick="adminTab('sales')">📊 Sales<span id="bdgASal"></span></button>
         </div>
 
         <div class="card" id="tabPay">
@@ -436,6 +467,14 @@
           <h4>Open review early</h4>
           <div class="note">Only if you want to start reviewing the current cutoff before its last day ends.</div>
           <div class="row"><select id="relCut"></select><button class="btn gray" style="margin-top:0" onclick="releaseNowUI()">Open review</button></div>
+        </div>
+
+        <div class="card" id="tabSales" style="display:none">
+          <b>Daily sales &amp; deposits</b>
+          <div class="note">Each day the store was open: the staff's sales report, the bank deposit for that sales date, and whether they match. Tap Verify when it checks out.</div>
+          <div class="row"><input type="month" id="aslMonth"><button class="btn" style="margin-top:0" onclick="loadAdminSales()">Show</button></div>
+          <div class="amsg" id="aslMsg"></div>
+          <div id="aslOut" class="note">Pick a month and tap Show.</div>
         </div>
 
         <div class="card" id="tabStaff" style="display:none">
@@ -607,8 +646,9 @@
 
     // ---- bottom tabs (the "who are you" card moves into the open tab) ----
     function showTab(t) {
-      ['Home', 'Rec', 'Pay', 'Req', 'Sch'].forEach(k => { $('s' + k).classList.toggle('on', k === t); $('tb' + k).classList.toggle('on', k === t); });
+      ['Home', 'Rec', 'Pay', 'Req', 'Sal', 'Sch'].forEach(k => { $('s' + k).classList.toggle('on', k === t); $('tb' + k).classList.toggle('on', k === t); });
       curTab = t;
+      if (t === 'Sal') salesTabInit();
       const slot = $('s' + t).querySelector('.idslot'); if (slot) slot.appendChild($('idcard'));
       try { pinVisibility(); } catch (e) {}
       window.scrollTo(0, 0);
@@ -618,7 +658,7 @@
       const s = currentStaff();
       $('pin').style.display = (curTab === 'Home' && s && s.fp && !s.temp && !s.payslipOnly) ? 'none' : '';
     }
-    showTab((location.hash.match(/tab=(Home|Rec|Pay|Req|Sch)/) || [])[1] || 'Home');
+    showTab((location.hash.match(/tab=(Home|Rec|Pay|Req|Sal|Sch)/) || [])[1] || 'Home');
     // remember who uses this phone (regular staff only)
     $('staff').addEventListener('change', () => {
       try { const s = currentStaff(); if (s && !s.temp) localStorage.setItem('tcLastStaff', s.id); else if (!s) localStorage.removeItem('tcLastStaff'); } catch (e) {}
@@ -1054,7 +1094,7 @@
       $('payOut').innerHTML = 'Pick a month and tap Show.';
     }
     function adminTab(t) {
-      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl'], ['staff', 'tabStaff', 'subStaff']].forEach(x => {
+      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl'], ['staff', 'tabStaff', 'subStaff'], ['sales', 'tabSales', 'subSales']].forEach(x => {
         $(x[1]).style.display = x[0] === t ? 'block' : 'none';
         $(x[2]).className = x[0] === t ? 'on' : '';
       });
@@ -1063,6 +1103,7 @@
       if (t === 'req') loadAdminRequests();
       if (t === 'psl') loadAdminPayslips();
       if (t === 'staff') loadAdminStaff();
+      if (t === 'sales') { if (!$('aslMonth').value) { const n = new Date(); $('aslMonth').value = n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2); } loadAdminSales(); }
       if (t === 'sched' && !$('schMonth').value) { const n = new Date(); $('schMonth').value = n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2); $('schHalf').value = n.getDate() <= 15 ? '1' : '2'; loadAdminSched(); }
     }
     function loadSummary() {
@@ -1262,7 +1303,8 @@
         applyDeact(n.deactivated || null);
         showReleaseDue(n.releaseDue || []);
         if (n.theme) applyTheme(n.theme);
-        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
+        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0) + (n.adminSales || 0));
+        badge('bdgASal', n.adminSales || 0);
         badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
         if (!s) { $('staffNotice').style.display = 'none'; badge('bdgPay', 0); badge('bdgReq', 0); return; }
         badge('bdgPay', n.newPayslips || 0); badge('bdgReq', n.requestUpdates || 0);
@@ -1453,6 +1495,99 @@
     function chipFor(st) { return st === 'REHIRED' ? '<span class="chip a">Re-activated</span>' : st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>'; }
 
 
+
+
+    // ===================== DAILY SALES + DEPOSITS =====================
+    const pesoStr = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function salesTabInit() {
+      const t = todayISO();
+      if (!$('slDate').value) $('slDate').value = t;
+      if (!$('dpDate').value) $('dpDate').value = t;
+      $('slDate').max = t; $('dpDate').max = t;
+    }
+    function moneyIn(v) { const n = Number(String(v || '').replace(/[,₱\s]/g, '')); return isFinite(n) ? Math.round(n * 100) / 100 : NaN; }
+    function loadSales() {
+      const a = needPin('slOut'); if (!a) return;
+      $('slOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
+      api('salesget', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
+        if (!r.ok) { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
+        const sel = $('dpSales'), keep = sel.value;
+        sel.innerHTML = '<option value="">— Pick the sales date —</option>' + (r.undeposited || []).map(x => '<option value="' + x.date + '">' + x.date + ' · sales ' + pesoStr(x.total) + '</option>').join('');
+        if (keep) sel.value = keep;
+        $('slOut').innerHTML = '<table><tr><th>Date</th><th class="r">Sales</th><th class="r">Deposit</th><th>Status</th></tr>' + r.recent.map(x => {
+          let st = x.total == null ? '<span style="color:var(--sub)">no report</span>' : x.deposit == null ? '⏳ not deposited' : Math.abs(x.deposit - x.total) < 0.5 ? '✅' : (x.deposit < x.total ? '⚠️ short ' : '⚠️ over ') + pesoStr(Math.abs(x.deposit - x.total));
+          return '<tr><td>' + esc(x.date.slice(5)) + '</td><td class="r">' + (x.total == null ? '—' : pesoStr(x.total)) + '</td><td class="r">' + (x.deposit == null ? '—' : pesoStr(x.deposit)) + '</td><td style="font-size:11px">' + st + '</td></tr>';
+        }).join('') + '</table>';
+      }).catch(e => { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
+    }
+    function salesSubmitUI() {
+      const a = needPin('slOut'); if (!a) return;
+      const date = $('slDate').value, total = moneyIn($('slTotal').value), f = $('slFile').files[0];
+      if (!date) return alert('Pick the sales date.');
+      if (!(total >= 0) || $('slTotal').value.trim() === '') return alert('Enter the total sales amount.');
+      if (!f) return alert('Attach the screenshot of the daily report.');
+      if (!confirm('Submit sales report for ' + date + ': ' + pesoStr(total) + '?')) return;
+      $('slOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
+      readAttachment(f).then(file => api('salessubmit', { staffId: a.s.id, pin: a.pin, date: date, total: total, notes: $('slNotes').value.trim(), file: file }, 120000)).then(r => {
+        alert((r.ok ? '✅ ' : '❌ ') + r.message);
+        if (r.ok) { $('slTotal').value = ''; $('slFile').value = ''; $('slNotes').value = ''; }
+        loadSales();
+      }).catch(e => { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Not sent: ' + esc(e.message) + '</div>'; });
+    }
+    function depositSubmitUI() {
+      const a = needPin('slOut'); if (!a) return;
+      const sd = $('dpSales').value, dd = $('dpDate').value, amt = moneyIn($('dpAmount').value), f = $('dpFile').files[0];
+      if (!sd) return alert('Pick the sales date this deposit is for (tap "Show sales & deposits" if the list is empty).');
+      if (!dd) return alert('Pick the deposit date.');
+      if (!(amt > 0)) return alert('Enter the deposit amount.');
+      if (!f) return alert('Attach the photo of the deposit slip.');
+      if (!confirm('Submit deposit of ' + pesoStr(amt) + ' for sales date ' + sd + '?')) return;
+      $('slOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
+      readAttachment(f).then(file => api('depositsubmit', { staffId: a.s.id, pin: a.pin, salesDate: sd, depositDate: dd, amount: amt, ref: $('dpRef').value.trim(), file: file }, 120000)).then(r => {
+        alert((r.ok ? '✅ ' : '❌ ') + r.message);
+        if (r.ok) { $('dpAmount').value = ''; $('dpFile').value = ''; $('dpRef').value = ''; $('dpSales').value = ''; }
+        loadSales();
+      }).catch(e => { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Not sent: ' + esc(e.message) + '</div>'; });
+    }
+
+    // ---- admin ----
+    let aslData = null;
+    function loadAdminSales() {
+      $('aslOut').innerHTML = 'Loading…';
+      adminCall('salesList', { month: $('aslMonth').value }, 90000).then(r => {
+        if (!r.ok) { $('aslOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        aslData = r;
+        const stChip = st => ({ OK: '<span class="chip a">✅ Deposited – matches</span>', SHORT: '<span class="chip d">⚠️ Short deposit</span>', OVER: '<span class="chip p">⚠️ Over deposit</span>', NOT_DEPOSITED: '<span class="chip p">⏳ Not yet deposited</span>', MISSING: '<span class="chip d">❌ No sales report</span>', NONE: '' })[st] || '';
+        let h = '<div class="pcard"><div class="tl"><div><span>Total sales</span><span><b>' + pesoStr(r.totals.sales) + '</b></span></div><div><span>Total deposited</span><span>' + pesoStr(r.totals.deposited) + '</span></div><div><span>Sales not yet deposited</span><span style="color:var(--pink)"><b>' + pesoStr(r.totals.undeposited) + '</b></span></div></div></div>';
+        if (!r.days.length) h += '<div class="note">No sales or open days in this month.</div>';
+        r.days.forEach(d => {
+          const S = d.sales, D = d.deposit;
+          h += '<div class="pcard"><b>' + esc(d.date) + '</b> ' + stChip(d.status) + (d.diff != null && Math.abs(d.diff) >= 0.5 ? ' <b style="color:#e11d48">' + (d.diff < 0 ? '−' : '+') + pesoStr(Math.abs(d.diff)) + '</b>' : '') +
+            '<div style="margin-top:6px;font-size:13px"><b>📊 Sales:</b> ' + (S ? pesoStr(S.total) + ' · by ' + esc(S.name) + ' · ' + esc(S.at) + (S.verifiedAt ? ' <span class="chip a">Verified</span>' : '') + (S.notes ? '<div class="note">Note: ' + esc(S.notes) + '</div>' : '') : '<span style="color:var(--sub)">no report</span>') + '</div>' +
+            (S ? '<div class="row"><button class="btn gray" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesFileUI(\'sales\',\'' + d.date + '\')">🖼 Screenshot</button><button class="btn ' + (S.verifiedAt ? 'gray' : 'green') + '" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesVerifyUI(\'sales\',\'' + d.date + '\',' + (!S.verifiedAt) + ')">' + (S.verifiedAt ? 'Re-open' : 'Verify') + '</button></div><div id="slf_sales_' + d.date + '"></div>' : '') +
+            '<div style="margin-top:8px;font-size:13px"><b>🏦 Deposit:</b> ' + (D ? pesoStr(D.amount) + ' · deposited ' + esc(D.depDate) + (D.ref ? ' · ref ' + esc(D.ref) : '') + ' · by ' + esc(D.name) + (D.verifiedAt ? ' <span class="chip a">Verified</span>' : '') : '<span style="color:var(--sub)">none yet</span>') + '</div>' +
+            (D ? '<div class="row"><button class="btn gray" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesFileUI(\'deposit\',\'' + d.date + '\')">🧾 Deposit slip</button><button class="btn ' + (D.verifiedAt ? 'gray' : 'green') + '" style="margin-top:4px;padding:8px 0;font-size:13px" onclick="salesVerifyUI(\'deposit\',\'' + d.date + '\',' + (!D.verifiedAt) + ')">' + (D.verifiedAt ? 'Re-open' : 'Verify') + '</button></div><div id="slf_deposit_' + d.date + '"></div>' : '') + '</div>';
+        });
+        $('aslOut').innerHTML = h;
+        refreshNotices();
+      }).catch(e => { $('aslOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function salesVerifyUI(kind, date, verified) {
+      amsg('aslMsg', 'Saving…', true);
+      adminCall('salesVerify', { kind: kind, date: date, verified: verified }).then(r => { amsg('aslMsg', r.message, r.ok); if (r.ok) loadAdminSales(); })
+        .catch(e => amsg('aslMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function salesFileUI(kind, date) {
+      const box = $('slf_' + kind + '_' + date); if (!box) return;
+      if (box.innerHTML) { box.innerHTML = ''; return; }
+      box.innerHTML = '<div class="note">Loading…</div>';
+      adminCall('salesFile', { kind: kind, date: date }, 90000).then(r => {
+        if (!r.ok) { box.innerHTML = '<div class="note" style="color:#b00020">' + esc(r.message) + '</div>'; return; }
+        const bin = atob(r.data), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([u], { type: r.mime }));
+        box.innerHTML = /^image\//.test(r.mime) ? '<img src="' + url + '" style="width:100%;border-radius:10px;margin-top:6px">' : '<a href="' + url + '" target="_blank" rel="noopener" class="sbtn" style="display:block;text-align:center;text-decoration:none;color:#fff;padding:12px 0">Open PDF</a>';
+      }).catch(e => { box.innerHTML = '<div class="note" style="color:#b00020">Connection error: ' + esc(e.message) + '</div>'; });
+    }
 
     // ===================== EXIT FORMS (Exit Interview + Exit Clearance) =====================
     const EXIT_REASONS = ['Resignation', 'End of Contract', 'School Schedule', 'Personal Reasons', 'Relocation', 'Career Growth', 'Other'];
