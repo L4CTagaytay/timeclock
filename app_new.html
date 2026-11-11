@@ -105,6 +105,24 @@
     .slip .warn { color: var(--red); font-size: 12px; margin-top: 8px; }
     .pcard { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 12px; background: #fff; }
     .pcard .tl div { font-size: 13.5px; }
+    .stlegend { font-size: 11px; color: var(--sub); margin: 12px 2px 4px; }
+    .stbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .stbl th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--sub); padding: 8px 6px; border-bottom: 1px solid var(--line); background: #faf7f9; }
+    .stbl td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .stbl .srow { cursor: pointer; } .stbl .srow:active { background: #fdf0f5; }
+    .stbl .sst { text-align: center; width: 54px; } .sdiff { font-size: 10.5px; color: #e11d48; font-weight: 700; }
+    .sview { color: var(--pink); font-weight: 700; font-size: 11.5px; cursor: pointer; text-decoration: underline; }
+    .snone { color: var(--sub); font-size: 11.5px; }
+    .sdot { font-size: 11px; font-weight: 800; } .sdot.v { color: #16a34a; } .sdot.s { color: #d97706; } .sdot.r { color: #e11d48; }
+    .sdet td { background: #fcf8fa; } .sdbox { font-size: 12.5px; }
+    .sviewer { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 9999; display: none; align-items: center; justify-content: center; padding: 14px; }
+    .svbox { background: #fff; border-radius: 16px; width: 100%; max-width: 520px; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
+    .svhead { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .svhead button { border: 0; background: none; font-size: 20px; cursor: pointer; color: inherit; width: auto; margin: 0; padding: 0 4px; }
+    .svbody { overflow: auto; padding: 10px; } .svbody img { width: 100%; border-radius: 10px; display: block; }
+    html.dark .stbl, html.dark .svbox { background: #17171c; border-color: #22222a; color: #eee; }
+    html.dark .stbl th { background: #1e1e25; border-color: #2a2a33; } html.dark .stbl td { border-color: #2a2a33; }
+    html.dark .sdet td { background: #1b1b21; } html.dark .stbl .srow:active { background: #2a1f26; } html.dark .svhead { border-color: #2a2a33; }
     .chip { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
     .chip.p { background: #fff4d6; color: #8a5a00; } .chip.a { background: #e3f8ea; color: #166534; } .chip.d { background: #ffe4ea; color: #9f1239; }
     .badge { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; line-height: 16px; text-align: center; }
@@ -1560,24 +1578,57 @@
         const stChip = st => ({ OK: '<span class="chip a">✅ Deposited – matches</span>', SHORT: '<span class="chip d">⚠️ Short deposit</span>', OVER: '<span class="chip p">⚠️ Over deposit</span>', NOT_DEPOSITED: '<span class="chip p">⏳ Not yet deposited</span>', MISSING: '<span class="chip d">❌ No sales report</span>', NONE: '' })[st] || '';
         let h = '<div class="pcard"><div class="tl"><div><span>Total sales</span><span><b>' + pesoStr(r.totals.sales) + '</b></span></div><div><span>Total deposited</span><span>' + pesoStr(r.totals.deposited) + '</span></div><div><span>Sales not yet deposited</span><span style="color:var(--pink)"><b>' + pesoStr(r.totals.undeposited) + '</b></span></div></div></div>';
         if (!r.days.length) h += '<div class="note">No sales or open days in this month.</div>';
-        r.days.forEach(d => {
-          const S = d.sales, D = d.deposit;
-          const chipOf = X => X.status === 'VERIFIED' ? ' <span class="chip a">Verified</span>' : X.status === 'RETURNED' ? ' <span class="chip d">Returned to staff</span>' : ' <span class="chip p">Submitted</span>';
-          const btn = (label, fn, cls) => '<button class="btn ' + (cls || 'gray') + '" style="margin-top:4px;padding:8px 0;font-size:12.5px" onclick="' + fn + '">' + label + '</button>';
-          const tools = (kind, X) => '<div class="row">' + btn(kind === 'sales' ? '🖼 Screenshot' : '🧾 Slip', "salesFileUI('" + kind + "','" + d.date + "')") + btn('✏️ Edit', "salesEditUI('" + kind + "','" + d.date + "')") +
-            (X.status === 'VERIFIED' ? btn('Un-verify', "salesVerifyUI('" + kind + "','" + d.date + "',false)") : btn('Verify', "salesVerifyUI('" + kind + "','" + d.date + "',true)", 'green')) + btn('↩️ Return', "salesReturnUI('" + kind + "','" + d.date + "')", 'red') + '</div>' +
-            '<div id="sle_' + kind + '_' + d.date + '"></div><div id="slf_' + kind + '_' + d.date + '"></div>';
-          h += '<div class="pcard"><b>' + esc(d.date) + '</b> ' + stChip(d.status) + (d.diff != null && Math.abs(d.diff) >= 0.5 ? ' <b style="color:#e11d48">' + (d.diff < 0 ? '−' : '+') + pesoStr(Math.abs(d.diff)) + '</b>' : '') +
-            '<div style="margin-top:6px;font-size:13px"><b>📊 Sales:</b> ' + (S ? pesoStr(S.total) + ' · by ' + esc(S.name) + ' · ' + esc(S.at) + chipOf(S) + (S.notes ? '<div class="note">Staff note: ' + esc(S.notes) + '</div>' : '') + (S.note ? '<div class="note">Admin note: ' + esc(S.note) + '</div>' : '') : '<span style="color:var(--sub)">no report</span>') + '</div>' +
-            (S ? tools('sales', S) : '') +
-            '<div style="margin-top:8px;font-size:13px"><b>🏦 Deposit:</b> ' + (D ? pesoStr(D.amount) + ' · deposited ' + esc(D.depDate) + (D.ref ? ' · ref ' + esc(D.ref) : '') + ' · by ' + esc(D.name) + chipOf(D) + (D.note ? '<div class="note">Admin note: ' + esc(D.note) + '</div>' : '') : '<span style="color:var(--sub)">none yet</span>') + '</div>' +
-            (D ? tools('deposit', D) : '') + '</div>';
-        });
+        const md = x => { const p = String(x).split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + ' ' + (+p[2]); };
+        const dot = X => !X ? '' : X.status === 'VERIFIED' ? '<span class="sdot v" title="Verified">✓</span>' : X.status === 'RETURNED' ? '<span class="sdot r" title="Returned">↩</span>' : '<span class="sdot s" title="Submitted, not verified">•</span>';
+        const ico = st => ({ OK: '✅', SHORT: '⚠️', OVER: '⚠️', NOT_DEPOSITED: '⏳', MISSING: '❌' })[st] || '';
+        const view = (kind, d, X) => X && X.hasFile ? '<a class="sview" onclick="event.stopPropagation();salesViewUI(\'' + kind + '\',\'' + d + '\')">View</a>' : '';
+        if (r.days.length) {
+          h += '<div class="stlegend">✓ verified · • not yet verified · ↩ returned · tap a row for details</div><table class="stbl"><thead><tr><th>Date</th><th>Daily sales</th><th>Deposit</th><th></th></tr></thead><tbody>';
+          r.days.forEach(d => {
+            const S = d.sales, D = d.deposit;
+            const diff = d.diff != null && Math.abs(d.diff) >= 0.5 ? '<div class="sdiff">' + (d.diff < 0 ? '−' : '+') + pesoStr(Math.abs(d.diff)) + '</div>' : '';
+            h += '<tr class="srow" onclick="salesRowUI(\'' + d.date + '\')"><td><b>' + md(d.date) + '</b></td>' +
+              '<td>' + (S ? pesoStr(S.total) + ' ' + dot(S) + '<br>' + view('sales', d.date, S) : '<span class="snone">no report</span>') + '</td>' +
+              '<td>' + (D ? pesoStr(D.amount) + ' ' + dot(D) + '<br>' + view('deposit', d.date, D) : '<span class="snone">—</span>') + '</td>' +
+              '<td class="sst">' + ico(d.status) + diff + '</td></tr>' +
+              '<tr class="sdet" id="sdet_' + d.date + '" style="display:none"><td colspan="4"></td></tr>';
+          });
+          h += '</tbody></table>';
+        }
         $('aslOut').innerHTML = h;
         refreshNotices();
       }).catch(e => { $('aslOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
     }
 
+
+    function salesRowUI(date) {
+      const tr = $('sdet_' + date); if (!tr) return;
+      if (tr.style.display !== 'none') { tr.style.display = 'none'; return; }
+      document.querySelectorAll('.sdet').forEach(x => x.style.display = 'none');
+      const d = (aslData.days || []).find(x => x.date === date) || {}, S = d.sales, D = d.deposit;
+      const stTxt = ({ OK: '✅ Deposited – matches', SHORT: '⚠️ Short deposit', OVER: '⚠️ Over deposit', NOT_DEPOSITED: '⏳ Not yet deposited', MISSING: '❌ No sales report' })[d.status] || '';
+      const chipOf = X => X.status === 'VERIFIED' ? ' <span class="chip a">Verified</span>' : X.status === 'RETURNED' ? ' <span class="chip d">Returned to staff</span>' : ' <span class="chip p">Submitted</span>';
+      const btn = (label, fn, cls) => '<button class="btn ' + (cls || 'gray') + '" style="margin-top:4px;padding:7px 0;font-size:12px" onclick="' + fn + '">' + label + '</button>';
+      const tools = (kind, X) => '<div class="row">' + btn('✏️ Edit', "salesEditUI('" + kind + "','" + date + "')") +
+        (X.status === 'VERIFIED' ? btn('Un-verify', "salesVerifyUI('" + kind + "','" + date + "',false)") : btn('Verify', "salesVerifyUI('" + kind + "','" + date + "',true)", 'green')) + btn('↩️ Return', "salesReturnUI('" + kind + "','" + date + "')", 'red') + '</div><div id="sle_' + kind + '_' + date + '"></div>';
+      tr.firstChild.innerHTML = '<div class="sdbox"><b>' + esc(date) + '</b> ' + stTxt + (d.diff != null && Math.abs(d.diff) >= 0.5 ? ' <b style="color:#e11d48">' + (d.diff < 0 ? '−' : '+') + pesoStr(Math.abs(d.diff)) + '</b>' : '') +
+        '<div style="margin-top:6px"><b>📊 Sales:</b> ' + (S ? pesoStr(S.total) + ' · by ' + esc(S.name) + ' · ' + esc(S.at) + chipOf(S) + (S.notes ? '<div class="note">Staff note: ' + esc(S.notes) + '</div>' : '') + (S.note ? '<div class="note">Admin note: ' + esc(S.note) + '</div>' : '') : '<span style="color:var(--sub)">no report</span>') + '</div>' + (S ? tools('sales', S) : '') +
+        '<div style="margin-top:8px"><b>🏦 Deposit:</b> ' + (D ? pesoStr(D.amount) + ' · deposited ' + esc(D.depDate) + (D.ref ? ' · ref ' + esc(D.ref) : '') + ' · by ' + esc(D.name) + chipOf(D) + (D.note ? '<div class="note">Admin note: ' + esc(D.note) + '</div>' : '') : '<span style="color:var(--sub)">none yet</span>') + '</div>' + (D ? tools('deposit', D) : '') + '</div>';
+      tr.style.display = '';
+    }
+    function salesViewUI(kind, date) {
+      let m = $('sViewer');
+      if (!m) { m = document.createElement('div'); m.id = 'sViewer'; m.className = 'sviewer'; m.onclick = e => { if (e.target === m) m.style.display = 'none'; }; document.body.appendChild(m); }
+      m.innerHTML = '<div class="svbox"><div class="svhead"><b>' + (kind === 'deposit' ? '🧾 Deposit slip' : '📊 Daily sales report') + ' · ' + esc(date) + '</b><button onclick="$(\'sViewer\').style.display=\'none\'">✕</button></div><div class="svbody">Loading…</div></div>';
+      m.style.display = 'flex';
+      const body = m.querySelector('.svbody');
+      adminCall('salesFile', { kind: kind, date: date }, 90000).then(r => {
+        if (!r.ok) { body.innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        const bin = atob(r.data), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([u], { type: r.mime }));
+        body.innerHTML = /^image\//.test(r.mime) ? '<img src="' + url + '">' : '<a href="' + url + '" target="_blank" rel="noopener" class="sbtn" style="display:block;text-align:center;text-decoration:none;color:#fff;padding:12px 0">Open PDF</a>';
+      }).catch(e => { body.innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
     function salesFind(kind, date) { const d = (aslData && aslData.days || []).find(x => x.date === date); return d ? (kind === 'deposit' ? d.deposit : d.sales) : null; }
     function salesEditUI(kind, date) {
       const box = $('sle_' + kind + '_' + date); if (!box) return;
