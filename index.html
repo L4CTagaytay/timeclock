@@ -107,6 +107,7 @@
     .pcard .tl div, .sdbox .tl div { font-size: 13px; }
     .rqtbl .rqpend td:first-child { box-shadow: inset 3px 0 0 var(--pink); } .rqtbl .rqpend { background: rgba(236,72,153,.06); }
     .chip.pwait { background: #dbeafe; color: #1e40af; } html.dark .chip.pwait { background: #1e2a4a; color: #93b4ff; }
+    .stEye { cursor: pointer; text-decoration: none; font-size: 13px; } .stpin { font-family: ui-monospace, monospace; letter-spacing: 1px; font-weight: 700; }
     .stlegend { font-size: 11px; color: var(--sub); margin: 12px 2px 4px; }
     .stbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
     .stbl > thead > tr > th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--sub); padding: 8px 6px; border-bottom: 1px solid var(--line); background: #faf7f9; }
@@ -1382,19 +1383,38 @@
       return '<div>' +
         '<b>' + esc(x.name) + '</b> <span style="color:#889;font-size:12px">' + esc(x.id) + '</span><div style="font-size:12px;color:#445;margin-top:2px">' + info + '</div>' +
         '<div>' + (x.active
-          ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🔑 New code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + (temp ? '' : b(x.supervisor ? '⭐ Remove supervisor' : '⭐ Make supervisor', "stSup('" + x.id + "'," + (!x.supervisor) + ")")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
+          ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🎲 Random code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + (temp ? '' : b(x.supervisor ? '⭐ Remove supervisor' : '⭐ Make supervisor', "stSup('" + x.id + "'," + (!x.supervisor) + ")")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
           : b('Re-activate', "stSetActive('" + x.id + "',true)")) + '</div>' +
+        (x.active ? '<div style="margin-top:8px;font-size:12.5px"><b>🔑 Access code:</b> ' + stPinSpan(x) + ' <span class="snone">(tap 👁 in the table header to show)</span></div>' +
+          '<div class="row" style="margin-top:4px"><input type="text" id="sp_' + esc(x.id) + '" inputmode="numeric" maxlength="4" placeholder="Type new 4-digit code" style="flex:2;margin-top:0" oninput="this.value=this.value.replace(/\\D/g,\'\')"><button class="btn green" style="margin-top:0;flex:1;padding:8px 0;font-size:13px" onclick="stSetPinUI(\'' + esc(x.id) + '\')">Set code</button></div>' : '') +
         '<div id="stEd_' + esc(x.id) + '"></div></div>';
+    }
+    let stShowPins = false, stPinTimer = null;
+    function stPinSpan(x) { return '<span class="stpin" data-pin="' + esc(x.pin || '') + '">' + (stShowPins ? esc(x.pin || '—') : '••••') + '</span>'; }
+    function stRevealUI() {
+      stShowPins = !stShowPins; clearTimeout(stPinTimer);
+      document.querySelectorAll('#stOut .stpin').forEach(e => e.textContent = stShowPins ? (e.dataset.pin || '—') : '••••');
+      if (stShowPins) stPinTimer = setTimeout(() => { if (stShowPins) stRevealUI(); }, 30000);
+    }
+    function stSetPinUI(id) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      const p = ($('sp_' + id).value || '').trim();
+      if (!/^\d{4}$/.test(p)) return alert('The access code must be exactly 4 digits.');
+      if (!confirm('Change ' + x.name + '’s access code? The old code will stop working right away.')) return;
+      amsg('stMsg', 'Saving…', true);
+      adminCall('setPin', { id: id, pin: p }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) loadAdminStaff(); })
+        .catch(e => amsg('stMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
     function stShort(n) { const w = String(n || '').split(' '); return /\.$/.test(w[0]) && w[1] ? w[0] + ' ' + w[1] : w[0]; }
     function stTable(list) {
       if (!list.length) return '<div class="note">None.</div>';
-      return '<table class="stbl"><thead><tr><th>Staff</th><th>Type</th><th>Rate</th><th>Phone</th></tr></thead><tbody>' + list.map(x => {
+      return '<table class="stbl"><thead><tr><th>Staff</th><th>Type</th><th>Rate</th><th>Phone</th><th style="white-space:nowrap">Code <a class="stEye" onclick="stRevealUI()" title="Show codes for 30 seconds">👁</a></th></tr></thead><tbody>' + list.map(x => {
         const temp = x.type === 'TEMP';
-        const rate = temp && x.dailyRate > 0 ? peso(x.dailyRate) + '/day' : peso(x.rate) + '/hr';
+        const amt = v => '₱' + (v % 1 ? Number(v).toFixed(2) : v);
+        const rate = temp && x.dailyRate > 0 ? amt(x.dailyRate) + '/day' : amt(x.rate) + '/hr';
         const ph = temp ? (x.hostName ? esc(stShort(x.hostName)) + '’s' : '<span style="color:#e11d48">⚠️ none</span>') : (x.hasPhone ? '✅' : '<span style="color:#d97706">⚠️ not set</span>');
-        return '<tr class="srow"' + (x.active ? '' : ' style="opacity:.65"') + ' onclick="stRowUI(\'' + esc(x.id) + '\')"><td><b>' + esc(stShort(x.name)) + '</b>' + (x.supervisor ? ' ⭐' : '') + '</td><td>' + (temp ? '<span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : 'Regular') + '</td><td>' + rate + '</td><td>' + ph + '</td></tr>' +
-          '<tr class="sdet strow" id="str_' + esc(x.id) + '" style="display:none"><td colspan="4"><div class="sdbox">' + stCard(x) + '</div></td></tr>';
+        return '<tr class="srow"' + (x.active ? '' : ' style="opacity:.65"') + ' onclick="stRowUI(\'' + esc(x.id) + '\')"><td><b>' + esc(stShort(x.name)) + '</b>' + (x.supervisor ? ' ⭐' : '') + '</td><td>' + (temp ? '<span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : 'Regular') + '</td><td>' + rate + '</td><td>' + ph + '</td><td>' + stPinSpan(x) + '</td></tr>' +
+          '<tr class="sdet strow" id="str_' + esc(x.id) + '" style="display:none"><td colspan="5"><div class="sdbox">' + stCard(x) + '</div></td></tr>';
       }).join('') + '</tbody></table>';
     }
     function stRowUI(id) {
@@ -1456,7 +1476,7 @@
     function stResetPin(id) {
       const x = stList.find(v => v.id === id); if (!x) return;
       if (!confirm('Make a new access code for ' + x.name + '? The old code will stop working.')) return;
-      adminCall('resetPin', { id: id }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) showNewCode(x.name, id, r.pin, 'New access code (PIN):'); })
+      adminCall('resetPin', { id: id }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) { showNewCode(x.name, id, r.pin, 'New access code (PIN):'); loadAdminStaff(); } })
         .catch(e => amsg('stMsg', 'Connection error: ' + e.message, false));
     }
     function stResetPhone(id) {
