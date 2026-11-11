@@ -105,6 +105,7 @@
     .slip .warn { color: var(--red); font-size: 12px; margin-top: 8px; }
     .pcard { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 12px; background: #fff; }
     .pcard .tl div { font-size: 13.5px; }
+    .rqtbl .rqpend td:first-child { box-shadow: inset 3px 0 0 var(--pink); } .rqtbl .rqpend { background: rgba(236,72,153,.06); }
     .stlegend { font-size: 11px; color: var(--sub); margin: 12px 2px 4px; }
     .stbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
     .stbl th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--sub); padding: 8px 6px; border-bottom: 1px solid var(--line); background: #faf7f9; }
@@ -2076,18 +2077,38 @@
       adminCall('requests', { filter: $('reqFilter').value }).then(r => {
         if (!r.ok) { $('aReqOut').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
         if (!r.requests.length) { $('aReqOut').innerHTML = 'No requests.'; return; }
-        $('aReqOut').innerHTML = r.requests.map(x => {
+        const md = v => { const p = String(v || '').split('-'); return p.length < 3 ? esc(v || '') : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + ' ' + (+p[2]); };
+        const tShort = { LEAVE: 'Leave', SICK: 'Sick', CHANGE: 'Change sched', SWAP: 'Swap day', RESIGN: 'Resignation' };
+        const stShort = st => st === 'REHIRED' ? '<span class="chip a">Re-act.</span>' : st === 'APPROVED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>';
+        const pend = r.requests.filter(x => x.status === 'PENDING').length;
+        let h = '<div class="stlegend">' + (pend ? '<b style="color:var(--pink)">' + pend + ' pending</b> · ' : '') + r.requests.length + ' request' + (r.requests.length > 1 ? 's' : '') + ' · tap a row for details &amp; actions</div><table class="stbl rqtbl"><thead><tr><th>Staff</th><th>Type</th><th>Date(s)</th><th>Status</th></tr></thead><tbody>';
+        r.requests.forEach(x => {
+          const when = x.type === 'RESIGN' ? 'Last day ' + md(x.to) : x.type === 'SWAP' ? 'Off ' + md(x.from) + '<br>Works ' + md(x.to) : md(x.from) + (x.to && x.to !== x.from ? '–' + md(x.to) : '') + (x.newShift ? '<br><span class="snone">→ ' + esc(x.newShift === 'OFF' ? 'day off' : shortShift(x.newShift)) + '</span>' : '');
+          const flag = (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE')) || (/RECONSIDERATION:/.test(x.reason) && x.status === 'PENDING') ? ' <span title="Late / reconsideration">⚠️</span>' : '';
+          h += '<tr class="srow' + (x.status === 'PENDING' ? ' rqpend' : '') + '" onclick="reqRowUI(\'' + x.id + '\')"><td><b>' + esc(String(x.name).split(' ')[0]) + '</b></td><td>' + (tShort[x.type] || esc(x.typeLabel)) + '</td><td>' + when + '</td><td>' + stShort(x.status) + flag + '</td></tr>' +
+            '<tr class="sdet" id="rqd_' + x.id + '" style="display:none"><td colspan="4"><div class="sdbox">' + reqCardHtml(x) + '</div></td></tr>';
+        });
+        $('aReqOut').innerHTML = h + '</tbody></table>';
+      }).catch(e => { $('aReqOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function reqRowUI(id) {
+      const tr = $('rqd_' + id); if (!tr) return;
+      const open = tr.style.display !== 'none';
+      document.querySelectorAll('#aReqOut .sdet').forEach(x => x.style.display = 'none');
+      if (!open) tr.style.display = '';
+    }
+    function reqCardHtml(x) {
+      {
           const auto = x.status === 'DENIED' && /Automatically denied/.test(x.note);
           const act = (x.status === 'PENDING' || auto) ? '<input id="an_' + x.id + '" placeholder="Note to staff (optional)" style="margin-top:6px">' +
             '<div class="row"><button class="btn green" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', true)">' + (auto ? 'Override &amp; approve' : x.type === 'RESIGN' ? 'Accept resignation' : 'Approve') + '</button>' +
             (x.status === 'PENDING' ? '<button class="btn red" style="margin-top:4px" onclick="decideUI(\'' + x.id + '\', false)">' + (x.type === 'RESIGN' ? 'Reject' : 'Deny') + '</button>' : '') + '</div>' : '';
-          return '<div class="pcard"><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
+          return '<div><b>' + esc(x.name) + '</b> – ' + esc(x.typeLabel) + ' ' + chipFor(x.status) + (x.late && (x.type === 'LEAVE' || x.type === 'CHANGE') ? ' <span class="chip d">less than 3 days</span>' : '') +
             '<div style="font-size:13px;margin-top:4px">' + reqWhen(x) + '</div>' + (x.type === 'RESIGN' ? resignAdminHtml(x) : '') +
             (/RECONSIDERATION:/.test(x.reason) && x.status === 'PENDING' ? ' <span class="chip p">Reconsideration – late request</span>' : '') +
             '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + noteHtml(x, auto) +
             '<div style="font-size:11px;color:#94a3b8">Filed ' + esc(x.filedAt) + (x.decidedAt ? ' • decided ' + esc(x.decidedAt) : '') + '</div>' + act + '</div>';
-        }).join('');
-      }).catch(e => { $('aReqOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+      }
     }
 
     // ---- admin: edit the note on a decided request (fix typos) ----
