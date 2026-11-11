@@ -211,7 +211,7 @@
     html.dark .adm .amsg.ok { background: #10301c; color: #9cf0bb; }
     html.dark .adm .amsg.err { background: #3b1219; color: #ff9aac; }
     html.dark [style*="color:#667"], html.dark [style*="color: #667"] { color: #9d9dab !important; }
-    html.dark [style*="color:#334"] { color: #d6d6de !important; } html.dark [style*="color:#1e40af"] { color: #93b4ff !important; }
+    html.dark [style*="color:#445"] { color: #c4c4ce !important; } html.dark [style*="color:#334"] { color: #d6d6de !important; } html.dark [style*="color:#1e40af"] { color: #93b4ff !important; }
 
     /* admin dark-mode switch */
     .theme-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -504,7 +504,7 @@
           <div class="note">Removing a staff member only deactivates them — their time records and payslips are kept. Temporary staff are switched off automatically after their last day.</div>
           <div class="amsg" id="stMsg"></div>
           <div id="stOut" class="note">Loading…</div>
-          <h4>Add staff</h4>
+          <details id="stAddBox" style="margin-top:14px"><summary style="cursor:pointer;font-size:14px;font-weight:700">➕ Add staff</summary>
           <div class="row"><select id="stType" onchange="stTypeChange()"><option value="REGULAR">Regular staff (hourly rate)</option><option value="TEMP">Temporary staff (fixed daily rate)</option></select></div>
           <div class="row"><input type="text" id="stName" placeholder="Full name"></div>
           <div class="row" id="stRegRow"><input type="number" id="stRate" min="0" step="0.01" inputmode="decimal" placeholder="Hourly rate (₱)"></div>
@@ -515,6 +515,7 @@
             <div class="note">The temporary staff can only TIME IN / OUT on this regular staff member's phone (it works right away: the phone he first punches on is saved as that person's phone, and after that only that phone works). He must also be on the work schedule. No late deductions, overtime or holiday premium — pay = days with IN and OUT × daily rate.</div>
           </div>
           <button class="btn green" onclick="addStaffUI()">Add staff</button>
+          </details>
           <div id="stNew"></div>
         </div>
 
@@ -1378,17 +1379,34 @@
         ? '<span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 6px;font-size:11px">TEMPORARY</span> ' + (x.dailyRate > 0 ? peso(x.dailyRate) + '/day' : peso(x.rate) + '/hr') + ' · ' + esc(x.from) + ' to ' + esc(x.to) + '<br>Uses ' + (x.hostName ? esc(x.hostName) + '’s phone' : '<b style="color:#b00020">no phone assigned</b>')
         : peso(x.rate) + '/hr · Phone: ' + (x.hasPhone ? 'registered' : '<span style="color:#b45309">not registered</span>') + (x.supervisor ? ' · <b style="color:var(--pink)">⭐ Store supervisor</b>' : '');
       const b = (label, fn, cls) => '<button class="btn ' + (cls || 'gray') + '" style="margin:4px 4px 0 0;padding:6px 10px;width:auto;font-size:12px" onclick="' + fn + '">' + label + '</button>';
-      return '<div style="border:1px solid #e3e8ef;border-radius:10px;padding:8px 10px;margin:6px 0;' + (x.active ? '' : 'opacity:.6') + '">' +
+      return '<div>' +
         '<b>' + esc(x.name) + '</b> <span style="color:#889;font-size:12px">' + esc(x.id) + '</span><div style="font-size:12px;color:#445;margin-top:2px">' + info + '</div>' +
         '<div>' + (x.active
           ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🔑 New code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + (temp ? '' : b(x.supervisor ? '⭐ Remove supervisor' : '⭐ Make supervisor', "stSup('" + x.id + "'," + (!x.supervisor) + ")")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
           : b('Re-activate', "stSetActive('" + x.id + "',true)")) + '</div>' +
         '<div id="stEd_' + esc(x.id) + '"></div></div>';
     }
+    function stShort(n) { const w = String(n || '').split(' '); return /\.$/.test(w[0]) && w[1] ? w[0] + ' ' + w[1] : w[0]; }
+    function stTable(list) {
+      if (!list.length) return '<div class="note">None.</div>';
+      return '<table class="stbl"><thead><tr><th>Staff</th><th>Type</th><th>Rate</th><th>Phone</th></tr></thead><tbody>' + list.map(x => {
+        const temp = x.type === 'TEMP';
+        const rate = temp && x.dailyRate > 0 ? peso(x.dailyRate) + '/day' : peso(x.rate) + '/hr';
+        const ph = temp ? (x.hostName ? esc(stShort(x.hostName)) + '’s' : '<span style="color:#e11d48">⚠️ none</span>') : (x.hasPhone ? '✅' : '<span style="color:#d97706">⚠️ not set</span>');
+        return '<tr class="srow"' + (x.active ? '' : ' style="opacity:.65"') + ' onclick="stRowUI(\'' + esc(x.id) + '\')"><td><b>' + esc(stShort(x.name)) + '</b>' + (x.supervisor ? ' ⭐' : '') + '</td><td>' + (temp ? '<span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : 'Regular') + '</td><td>' + rate + '</td><td>' + ph + '</td></tr>' +
+          '<tr class="sdet strow" id="str_' + esc(x.id) + '" style="display:none"><td colspan="4"><div class="sdbox">' + stCard(x) + '</div></td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    function stRowUI(id) {
+      const tr = $('str_' + id); if (!tr) return;
+      const open = tr.style.display !== 'none';
+      document.querySelectorAll('#stOut .strow').forEach(x => x.style.display = 'none');
+      if (!open) tr.style.display = '';
+    }
     function renderAdminStaff() {
       const act = stList.filter(x => x.active), ina = stList.filter(x => !x.active);
-      $('stOut').innerHTML = '<h4 style="margin-top:6px">Active (' + act.length + ')</h4>' + (act.map(stCard).join('') || '<div class="note">None.</div>') +
-        (ina.length ? '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:13px">Removed / inactive (' + ina.length + ')</summary>' + ina.map(stCard).join('') + '</details>' : '');
+      $('stOut').innerHTML = '<div class="stlegend">Active (' + act.length + ') · ⭐ store supervisor · tap a row for details &amp; actions</div>' + stTable(act) +
+        (ina.length ? '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:700">Removed / inactive (' + ina.length + ')</summary>' + stTable(ina) + '</details>' : '');
       $('stHost').innerHTML = hostOptions($('stHost').value);
     }
     function stEdit(id) {
