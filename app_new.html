@@ -108,22 +108,22 @@
     .rqtbl .rqpend td:first-child { box-shadow: inset 3px 0 0 var(--pink); } .rqtbl .rqpend { background: rgba(236,72,153,.06); }
     .stlegend { font-size: 11px; color: var(--sub); margin: 12px 2px 4px; }
     .stbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-    .stbl th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--sub); padding: 8px 6px; border-bottom: 1px solid var(--line); background: #faf7f9; }
-    .stbl td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .stbl > thead > tr > th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--sub); padding: 8px 6px; border-bottom: 1px solid var(--line); background: #faf7f9; }
+    .stbl > tbody > tr > td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
     .stbl .srow { cursor: pointer; } .stbl .srow:active { background: #fdf0f5; }
     .stbl .sst { text-align: center; width: 54px; } .sdiff { font-size: 10.5px; color: #e11d48; font-weight: 700; }
     .sview { color: var(--pink); font-weight: 700; font-size: 11.5px; cursor: pointer; text-decoration: underline; }
     .snone { color: var(--sub); font-size: 11.5px; }
     .sdot { font-size: 11px; font-weight: 800; } .sdot.v { color: #16a34a; } .sdot.s { color: #d97706; } .sdot.r { color: #e11d48; }
-    .sdet td { background: #fcf8fa; } .sdbox { font-size: 12.5px; }
+    .sdet > td { background: #fcf8fa; } .sdbox { font-size: 12.5px; }
     .sviewer { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 9999; display: none; align-items: center; justify-content: center; padding: 14px; }
     .svbox { background: #fff; border-radius: 16px; width: 100%; max-width: 520px; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
     .svhead { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
     .svhead button { border: 0; background: none; font-size: 20px; cursor: pointer; color: inherit; width: auto; margin: 0; padding: 0 4px; }
     .svbody { overflow: auto; padding: 10px; } .svbody img { width: 100%; border-radius: 10px; display: block; }
     html.dark .stbl, html.dark .svbox { background: #17171c; border-color: #22222a; color: #eee; }
-    html.dark .stbl th { background: #1e1e25; border-color: #2a2a33; } html.dark .stbl td { border-color: #2a2a33; }
-    html.dark .sdet td { background: #1b1b21; } html.dark .stbl .srow:active { background: #2a1f26; } html.dark .svhead { border-color: #2a2a33; }
+    html.dark .stbl > thead > tr > th { background: #1e1e25; border-color: #2a2a33; } html.dark .stbl > tbody > tr > td { border-color: #2a2a33; }
+    html.dark .sdet > td { background: #1b1b21; } html.dark .stbl .srow:active { background: #2a1f26; } html.dark .svhead { border-color: #2a2a33; }
     .chip { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
     .chip.p { background: #fff4d6; color: #8a5a00; } .chip.a { background: #e3f8ea; color: #166534; } .chip.d { background: #ffe4ea; color: #9f1239; }
     .badge { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; margin-left: 4px; line-height: 16px; text-align: center; }
@@ -485,9 +485,9 @@
           <div class="row"><select id="pslCut" onchange="loadAdminPayslips(this.value)"></select></div>
           <div class="amsg" id="aPslMsg"></div>
           <div id="aPslOut" class="note">Loading…</div>
-          <h4>Open review early</h4>
+          <details style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;font-weight:700">⏩ Open review early</summary>
           <div class="note">Only if you want to start reviewing the current cutoff before its last day ends.</div>
-          <div class="row"><select id="relCut"></select><button class="btn gray" style="margin-top:0" onclick="releaseNowUI()">Open review</button></div>
+          <div class="row"><select id="relCut"></select><button class="btn gray" style="margin-top:0" onclick="releaseNowUI()">Open review</button></div></details>
         </div>
 
         <div class="card" id="tabSales" style="display:none">
@@ -2189,7 +2189,7 @@
       adminCall('release', { start: d.start, ids: ids }, 90000).then(r => { amsg('aPslMsg', r.message, r.ok); loadAdminPayslips(d.start); refreshNotices(); })
         .catch(e => amsg('aPslMsg', 'Connection error: ' + e.message, false));
     }
-    function toggleSlip(id) { const el = $('ps_' + id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+    function toggleSlip(id) { const el = $('ps_' + id); if (!el) return; const open = el.style.display !== 'none'; document.querySelectorAll('#aPslOut .pslrow').forEach(x => x.style.display = 'none'); if (!open) el.style.display = ''; }
     function loadAdminPayslips(start, openId) {
       $('aPslOut').innerHTML = '<div style="color:#1a73e8;font-weight:600">Loading payslips… (about 5 seconds)</div>';
       adminCall('payslipStatus', { markSeen: true, start: start || '' }, 90000).then(r => {
@@ -2200,18 +2200,23 @@
         $('pslCut').innerHTML = r.cutoffs.length ? r.cutoffs.map(c => '<option value="' + c.start + '"' + (r.detail && c.start === r.detail.start ? ' selected' : '') + '>' + c.start + ' to ' + c.end + ' — ' + (c.drafts ? c.drafts + ' for review, ' : '') + c.accepted + '/' + c.total + ' accepted</option>').join('') : '<option>No payslips yet</option>';
         if (!r.detail) { $('aPslOut').innerHTML = '<div style="margin-top:8px">No payslips yet. Next review opens <b>' + esc(r.nextReview) + '</b>.</div>'; refreshNotices(); return; }
         const d = r.detail, drafts = d.rows.filter(x => x.status === 'DRAFT').length;
-        let h = '<div style="margin-top:6px">Target release: <b>' + esc(d.target) + '</b></div>';
+        const md = v => { const p = String(v || '').split('-'); return p.length < 3 ? esc(v || '') : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + ' ' + (+p[2]); };
+        const waiting = d.rows.filter(x => x.status !== 'DRAFT' && x.status !== 'ACCEPTED').length, acc = d.rows.filter(x => x.status === 'ACCEPTED').length;
+        const total = d.rows.reduce((t, x) => t + (x.slip ? +x.slip.finalGross || 0 : 0), 0);
+        let h = '<div class="stlegend" style="font-size:12px"><b>' + md(d.start) + '–' + md(d.end) + '</b> · target ' + esc(d.target) + '<br>' + (drafts ? '<b style="color:var(--pink)">' + drafts + ' for review</b> · ' : '') + waiting + ' waiting · ' + acc + ' accepted · total <b>' + peso(total) + '</b></div>';
         if (drafts) h += '<button class="btn green" onclick="releaseUI(\'all\')">Release all ' + drafts + ' reviewed payslips</button>';
+        h += '<div class="stlegend">Tap a row to view the payslip, adjust, or release</div><table class="stbl rqtbl"><thead><tr><th>Staff</th><th>Days</th><th>Gross pay</th><th>Status</th></tr></thead><tbody>';
         d.rows.forEach(x => {
-          const chip = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">' + (x.kind === 'TEMP-FINAL' ? 'Sent automatically' : 'Released') + ' – waiting for acceptance</span>';
+          const st = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted</span>' : '<span class="chip" style="background:#dbeafe;color:#1e40af">Waiting</span>';
+          const tag = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : x.kind === 'FINAL' ? ' <span class="chip" style="background:#fde2e8;color:#9f1239;font-size:10px;padding:1px 6px">Final</span>' : '';
+          const full = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">' + (x.kind === 'TEMP-FINAL' ? 'Sent automatically' : 'Released') + ' – waiting for acceptance</span>';
           const fin = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e">Temporary – final ' + esc(x.period) + '</span>' : x.kind === 'FINAL' ? ' <span class="chip" style="background:#fde2e8;color:#9f1239">Final pay – resigned ' + esc(x.period) + '</span>' : '';
-          h += '<div class="pcard"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><div><b>' + esc(x.name) + '</b> ' + chip + fin + (x.isNew ? ' <span class="chip a">new</span>' : '') + '</div>' +
-            '<div style="font-weight:800;color:#16a34a">' + peso(x.slip ? x.slip.finalGross : 0) + '</div></div>' +
-            '<button class="btn gray" style="margin-top:6px;padding:8px 0" onclick="toggleSlip(\'' + x.staffId + '\')">View / hide payslip</button>' +
-            '<div id="ps_' + x.staffId + '" style="display:' + (openId === x.staffId ? 'block' : 'none') + '">' + adminSlipHtml(x) +
+          h += '<tr class="srow' + (x.status === 'DRAFT' ? ' rqpend' : '') + '" onclick="toggleSlip(\'' + x.staffId + '\')"><td><b>' + esc(String(x.name).split(' ')[0]) + '</b>' + tag + (x.isNew ? ' <span class="chip a" style="font-size:10px;padding:1px 6px">new</span>' : '') + '</td><td>' + (x.slip ? x.slip.daysWorked : '') + '</td><td><b>' + peso(x.slip ? x.slip.finalGross : 0) + '</b></td><td>' + st + '</td></tr>' +
+            '<tr class="sdet pslrow" id="ps_' + x.staffId + '" style="display:' + (openId === x.staffId ? '' : 'none') + '"><td colspan="4"><div class="sdbox"><b>' + esc(x.name) + '</b> ' + full + fin + adminSlipHtml(x) +
             (x.status !== 'ACCEPTED' ? adjEditorHtml(x) : '') +
-            (x.status === 'DRAFT' ? '<button class="btn green" onclick="releaseUI([\'' + x.staffId + '\'])">Release to ' + esc(x.name.split(' ')[0]) + '</button>' : '') + '</div></div>';
+            (x.status === 'DRAFT' ? '<button class="btn green" onclick="releaseUI([\'' + x.staffId + '\'])">Release to ' + esc(x.name.split(' ')[0]) + '</button>' : '') + '</div></td></tr>';
         });
+        h += '</tbody></table>';
         $('aPslOut').innerHTML = h;
         refreshNotices();
       }).catch(e => { $('aPslOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
