@@ -100,12 +100,13 @@
     .slip th, .pcard th { background: none; color: var(--sub); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
     .slip td.r, .slip th.r, .pcard td.r, .pcard th.r { text-align: right; }
     .slip .totals { margin-top: 10px; font-size: 14px; }
-    .slip .totals div, .pcard .tl div { display: flex; justify-content: space-between; padding: 4px 0; }
+    .slip .totals div, .pcard .tl div, .sdbox .tl div { display: flex; justify-content: space-between; padding: 4px 0; }
     .slip .gross, .pcard .gr { font-weight: 800; font-size: 17px; color: var(--pink); border-top: 1.5px solid var(--line); margin-top: 6px; padding-top: 10px !important; }
     .slip .warn { color: var(--red); font-size: 12px; margin-top: 8px; }
     .pcard { border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-top: 12px; background: #fff; }
-    .pcard .tl div { font-size: 13.5px; }
+    .pcard .tl div, .sdbox .tl div { font-size: 13px; }
     .rqtbl .rqpend td:first-child { box-shadow: inset 3px 0 0 var(--pink); } .rqtbl .rqpend { background: rgba(236,72,153,.06); }
+    .chip.pwait { background: #dbeafe; color: #1e40af; } html.dark .chip.pwait { background: #1e2a4a; color: #93b4ff; }
     .stlegend { font-size: 11px; color: var(--sub); margin: 12px 2px 4px; }
     .stbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
     .stbl > thead > tr > th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--sub); padding: 8px 6px; border-bottom: 1px solid var(--line); background: #faf7f9; }
@@ -2207,11 +2208,11 @@
         if (drafts) h += '<button class="btn green" onclick="releaseUI(\'all\')">Release all ' + drafts + ' reviewed payslips</button>';
         h += '<div class="stlegend">Tap a row to view the payslip, adjust, or release</div><table class="stbl rqtbl"><thead><tr><th>Staff</th><th>Days</th><th>Gross pay</th><th>Status</th></tr></thead><tbody>';
         d.rows.forEach(x => {
-          const st = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted</span>' : '<span class="chip" style="background:#dbeafe;color:#1e40af">Waiting</span>';
+          const st = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted</span>' : '<span class="chip pwait">Waiting</span>';
           const tag = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : x.kind === 'FINAL' ? ' <span class="chip" style="background:#fde2e8;color:#9f1239;font-size:10px;padding:1px 6px">Final</span>' : '';
           const full = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">' + (x.kind === 'TEMP-FINAL' ? 'Sent automatically' : 'Released') + ' – waiting for acceptance</span>';
           const fin = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e">Temporary – final ' + esc(x.period) + '</span>' : x.kind === 'FINAL' ? ' <span class="chip" style="background:#fde2e8;color:#9f1239">Final pay – resigned ' + esc(x.period) + '</span>' : '';
-          h += '<tr class="srow' + (x.status === 'DRAFT' ? ' rqpend' : '') + '" onclick="toggleSlip(\'' + x.staffId + '\')"><td><b>' + esc(String(x.name).split(' ')[0]) + '</b>' + tag + (x.isNew ? ' <span class="chip a" style="font-size:10px;padding:1px 6px">new</span>' : '') + '</td><td>' + (x.slip ? x.slip.daysWorked : '') + '</td><td><b>' + peso(x.slip ? x.slip.finalGross : 0) + '</b></td><td>' + st + '</td></tr>' +
+          h += '<tr class="srow' + (x.status === 'DRAFT' ? ' rqpend' : '') + '" onclick="toggleSlip(\'' + x.staffId + '\')"><td><b>' + esc((w => /\.$/.test(w[0]) && w[1] ? w[0] + ' ' + w[1] : w[0])(String(x.name).split(' '))) + '</b>' + tag + (x.isNew ? ' <span class="chip a" style="font-size:10px;padding:1px 6px">new</span>' : '') + '</td><td>' + (x.slip ? x.slip.daysWorked : '') + '</td><td><b>' + peso(x.slip ? x.slip.finalGross : 0) + '</b></td><td>' + st + '</td></tr>' +
             '<tr class="sdet pslrow" id="ps_' + x.staffId + '" style="display:' + (openId === x.staffId ? '' : 'none') + '"><td colspan="4"><div class="sdbox"><b>' + esc(x.name) + '</b> ' + full + fin + adminSlipHtml(x) +
             (x.status !== 'ACCEPTED' ? adjEditorHtml(x) : '') +
             (x.status === 'DRAFT' ? '<button class="btn green" onclick="releaseUI([\'' + x.staffId + '\'])">Release to ' + esc(x.name.split(' ')[0]) + '</button>' : '') + '</div></td></tr>';
