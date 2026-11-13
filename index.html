@@ -313,11 +313,8 @@
         <div class="idslot"></div>
         <div class="card">
           <h2>🕒 My time in / out</h2>
-          <div class="hint">Enter your access code above, then pick a cutoff.</div>
-          <div class="slip-btns">
-            <button id="btnCur" onclick="viewSlip('current')" disabled>This cutoff</button>
-            <button id="btnPrev" onclick="viewSlip('previous')" disabled>Last cutoff</button>
-          </div>
+          <div class="row" style="align-items:center"><select id="recCut" style="flex:2"></select><button id="btnCur" class="sbtn" style="flex:1;margin:0" onclick="viewSlip($('recCut').value)" disabled>View</button></div>
+          <button id="btnPrev" style="display:none" disabled></button>
         </div>
         <div class="slip" id="slip"></div>
       </section>
@@ -337,7 +334,7 @@
         <h1 class="big">Requests</h1>
         <div class="idslot"></div>
         <div class="wsched">
-          <h2>📝 New request</h2>
+          <details id="rqFold"><summary style="cursor:pointer;font-size:16px;font-weight:800">➕ New request</summary>
           <div class="hint">Leave and Change of schedule must be filed at least 3 days ahead (otherwise automatically denied; only the admin can override). Sick leave can be filed anytime.</div>
           <select id="rqType" onchange="rqTypeChange()">
             <option value="">— Type of request —</option>
@@ -371,6 +368,7 @@
           </select>
           <textarea id="rqReason" rows="2" maxlength="250" placeholder="Details (e.g. what, where, why)"></textarea>
           <button class="sbtn green" onclick="submitReqUI()">Send request</button>
+          </details>
         </div>
         <div class="wsched">
           <h2>📋 My requests</h2>
@@ -395,16 +393,17 @@
         <h1 class="big">Sales</h1>
         <div class="idslot"></div>
         <div class="wsched">
-          <h2>📊 Daily sales report</h2>
+          <details class="salfold" open ontoggle="salFold(this)"><summary style="cursor:pointer;font-size:16px;font-weight:800">📊 Daily sales report</summary>
           <div class="hint">Upload the screenshot of the day's sales report and enter the total. Only staff on duty that day can submit.</div>
           <div class="mini">Sales date</div><input type="date" id="slDate">
           <div class="mini">Total sales (₱)</div><input type="text" id="slTotal" inputmode="decimal" placeholder="e.g. 12,450.00">
           <div class="mini">Screenshot of the daily report</div><input type="file" id="slFile" accept="image/*,application/pdf">
           <textarea id="slNotes" rows="2" maxlength="500" placeholder="Notes (optional)"></textarea>
           <button class="sbtn" onclick="salesSubmitUI()">Submit sales report</button>
+          </details>
         </div>
         <div class="wsched">
-          <h2>🏦 Bank deposit</h2>
+          <details class="salfold" ontoggle="salFold(this)"><summary style="cursor:pointer;font-size:16px;font-weight:800">🏦 Bank deposit</summary>
           <div class="hint">One deposit per sales date. Upload the deposit slip photo and enter the amount.</div>
           <div class="mini">For sales date</div><select id="dpSales" onfocus="if (this.options.length < 2) loadSales()"><option value="">— Tap to load the sales dates —</option></select>
           <div class="mini">Deposit date</div><input type="date" id="dpDate">
@@ -412,6 +411,7 @@
           <div class="mini">Bank reference no. (optional)</div><input type="text" id="dpRef" maxlength="60">
           <div class="mini">Photo of the deposit slip</div><input type="file" id="dpFile" accept="image/*,application/pdf">
           <button class="sbtn green" onclick="depositSubmitUI()">Submit deposit</button>
+          </details>
         </div>
         <div class="wsched">
           <h2>↩️ Returned to you</h2>
@@ -430,6 +430,7 @@
             <button onclick="loadWorkSched('current')">This cutoff</button>
             <button onclick="loadWorkSched('next')">Next cutoff</button>
           </div>
+          <label class="exopt" style="display:flex;align-items:center;gap:8px;font-size:13px;margin:8px 0 0"><input type="checkbox" id="wsMine" onchange="renderWS()" style="width:auto;margin:0"> Show my shifts only</label>
           <div id="wsOut" class="note">🔒 Enter your access code above, then pick a cutoff.</div>
         </div>
       </section>
@@ -1061,6 +1062,16 @@
     function showMsg(text, ok) { const m = $('msg'); m.textContent = text; m.className = 'msg ' + (ok ? 'ok' : 'err'); }
 
     // ---- payslip (PIN protected) ----
+
+    (function fillRecCut() {
+      const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], n = new Date(); let y = n.getFullYear(), m = n.getMonth(), h = n.getDate() <= 15 ? 1 : 2, o = '';
+      for (let k = 0; k < 6; k++) {
+        const last = new Date(y, m + 1, 0).getDate(), st = y + '-' + ('0' + (m + 1)).slice(-2) + '-' + (h === 1 ? '01' : '16');
+        o += '<option value="' + (k === 0 ? 'current' : st) + '">' + M[m] + ' ' + (h === 1 ? '1–15' : '16–' + last) + ', ' + y + (k === 0 ? ' (this cutoff)' : '') + '</option>';
+        if (h === 2) h = 1; else { h = 2; m--; if (m < 0) { m = 11; y--; } }
+      }
+      const sel = document.getElementById('recCut'); if (sel) sel.innerHTML = o;
+    })();
     function viewSlip(which) {
       const s = currentStaff();
       if (!s) return;
@@ -1279,6 +1290,15 @@
       const go = () => api('schedule', { which: which || 'current', staffId: s.id, pin: pin }, 40000);
       go().catch(e => /Unexpected reply/.test(e.message) ? new Promise(r => setTimeout(r, 1500)).then(go) : Promise.reject(e)).then(g => {
         if (!g.ok) { $('wsOut').innerHTML = esc(g.message || 'Could not load schedule.'); return; }
+        lastWS = g; renderWS();
+      }).catch(e => { $('wsOut').innerHTML = 'Could not load schedule (' + esc(e.message) + ').'; });
+    }
+    let lastWS = null;
+    function renderWS() {
+      const g0 = lastWS; if (!g0) return;
+      const me = currentStaff(), mine = $('wsMine').checked && me;
+      const g = Object.assign({}, g0, { staff: mine ? g0.staff.filter(x => x.id === me.id) : g0.staff });
+      {
         let h = '<div style="margin-bottom:6px;color:#334">' + esc(g.label) + ': ' + esc(g.start) + ' to ' + esc(g.end) + '</div>';
         if (!g.posted) { $('wsOut').innerHTML = h + '<div>No schedule posted for this cutoff yet.</div>'; return; }
         h += '<div class="scroll"><table><tr><th>Date</th>' + g.staff.map(s => '<th>' + esc(firstName(s.name)) + '</th>').join('') + '</tr>';
@@ -1289,7 +1309,7 @@
               return c[s.id] ? '<td class="on' + (rm ? ' rq' : '') + '">' + shortShift(c[s.id]) + rh + '</td>' : '<td class="off' + (rm ? ' rq' : '') + '">off' + rh + '</td>'; }).join('') + '</tr>';
         });
         $('wsOut').innerHTML = h + '</table></div>';
-      }).catch(e => { $('wsOut').innerHTML = 'Could not load schedule (' + esc(e.message) + ').'; });
+      }
     }
 
     // shift text -> 'HH:MM-HH:MM', '' (off) or null (invalid)
@@ -1601,6 +1621,20 @@
       const cs = currentStaff(); const catLine = cs && cs.category ? '<div style="font-size:12px;color:var(--sub);margin:4px 0">Category: <b>' + esc(cs.category) + '</b></div>' : '';
       return catLine + '<table><tr><th>Date</th><th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table><div class="tl" style="margin-top:6px">' + t + '</div>';
     }
+
+    let myPs = [];
+    function niceRange(a, b) { const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], p = String(a).split('-'), q = String(b).split('-'); return p.length < 3 ? a + ' to ' + b : M[+p[1] - 1] + ' ' + (+p[2]) + '–' + (q[1] !== p[1] ? M[+q[1] - 1] + ' ' : '') + (+q[2]) + ', ' + p[0]; }
+    function renderMyPs(start) {
+      const x = myPs.find(v => v.start === start); if (!x) return;
+      $('psOne').innerHTML = '<div class="pcard"><b>' + (x.final ? 'Final payslip: ' + esc(x.period) : esc(niceRange(x.start, x.end))) + '</b> ' +
+        (x.status === 'ACCEPTED' ? '<span class="chip a">' + (x.signed ? 'Signed ' : 'Accepted ') + esc(x.acceptedAt) + '</span>' : '<span class="chip p">Waiting for your signature</span>') +
+        (x.slip ? staffSlipHtml(x.slip) : '') +
+        (x.status !== 'ACCEPTED'
+          ? '<div class="ack-box">✍️ I have checked this payslip, I agree with it, and I acknowledge receipt of <b>' + peso(x.slip ? x.slip.grossPay : 0) + '</b>.</div>' + sigPadHtml('sg_' + x.start, 'Sign here with your finger') +
+            '<button class="sbtn green" onclick="acceptSlipUI(\'' + x.start + '\')">✍️ Sign &amp; accept payslip</button>'
+          : (x.signed ? '<button class="sbtn gray" style="margin-top:8px" onclick="mySignedSlipUI(\'' + x.start + '\')">📄 View signed payslip</button>' : '')) + '</div>';
+      if (x.status !== 'ACCEPTED') setTimeout(() => sigInit('sg_' + x.start), 60);
+    }
     function loadMyPayslips() {
       const a = needPin('payslipsOut'); if (!a) return;
       $('payslipsOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
@@ -1608,14 +1642,12 @@
         if (r && r.ok && !a.s.temp) notePhone(a.s.id, a.pin);
         if (!r.ok) { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         if (!r.payslips.length) { $('payslipsOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No payslip released yet. You will get a 🔔 notice here once the admin releases it.</div>'; return; }
-        $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + (x.final ? 'Final payslip: ' + esc(x.period) : esc(x.start) + ' to ' + esc(x.end)) + '</b> ' +
-          (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip p">Waiting for your acceptance</span>') +
-          (x.slip ? staffSlipHtml(x.slip) : '') +
-          (x.status !== 'ACCEPTED'
-            ? '<div class="ack-box">✍️ I have checked this payslip, I agree with it, and I acknowledge receipt of <b>' + peso(x.slip ? x.slip.grossPay : 0) + '</b>.</div>' + sigPadHtml('sg_' + x.start, 'Sign here with your finger') +
-              '<button class="sbtn green" onclick="acceptSlipUI(\'' + x.start + '\')">✍️ Sign &amp; accept payslip</button>'
-            : (x.signed ? '<button class="sbtn gray" style="margin-top:8px" onclick="mySignedSlipUI(\'' + x.start + '\')">📄 View signed payslip</button>' : '')) + '</div>').join('');
-        r.payslips.forEach(x => { if (x.status !== 'ACCEPTED') setTimeout(() => sigInit('sg_' + x.start), 60); });
+        myPs = r.payslips.slice().sort((a, b) => String(b.start).localeCompare(String(a.start)));
+        const first = (myPs.find(x => x.status !== 'ACCEPTED') || myPs[0]).start;
+        $('payslipsOut').innerHTML = '<div class="mini" style="margin-top:10px">Cutoff period</div><select id="psSel" onchange="renderMyPs(this.value)">' +
+          myPs.map(x => '<option value="' + esc(x.start) + '"' + (x.start === first ? ' selected' : '') + '>' + (x.final ? 'Final: ' + esc(x.period) : esc(niceRange(x.start, x.end))) + ' — ' + (x.status === 'ACCEPTED' ? (x.signed ? '✍️ Signed' : '✓ Accepted') : '⏳ To sign') + '</option>').join('') +
+          '</select><div id="psOne"></div>';
+        renderMyPs(first);
       }).catch(e => { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
     }
 
@@ -1680,6 +1712,7 @@
 
     // ===================== DAILY SALES + DEPOSITS =====================
     const pesoStr = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function salFold(d) { if (d.open) document.querySelectorAll('details.salfold').forEach(x => { if (x !== d) x.open = false; }); }
     function salesTabInit() {
       const t = todayISO();
       if (!$('slDate').value) $('slDate').value = t;
@@ -2210,22 +2243,29 @@
       $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Sending…</div>';
       api('request', { staffId: a.s.id, pin: a.pin, type: type, from: from, to: to, newShift: newShift, cover: type === 'SWAP' ? $('rqCover').value : '', reason: '[' + cat + '] ' + reason }, 40000).then(r => {
         if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
-        alert(r.status === 'DENIED' ? '❌ ' + r.message : '✅ ' + r.message);
+        alert(r.status === 'DENIED' ? '❌ ' + r.message : '✅ ' + r.message); try { $('rqFold').open = false; } catch (e) {}
         $('rqType').value = ''; $('rqCat').value = ''; $('rqFrom').value = ''; $('rqTo').value = ''; $('rqShift').value = ''; $('rqReason').value = ''; rqTypeChange();
         loadMyRequests(); refreshNotices();
       }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error — request NOT sent. Please try again. (' + esc(e.message) + ')</div>'; });
     }
+
+    function myReqRow(id) { const tr = $('mrq_' + id); if (!tr) return; const open = tr.style.display !== 'none'; document.querySelectorAll('#reqOut .myrq').forEach(x => x.style.display = 'none'); if (!open) tr.style.display = ''; }
     function loadMyRequests() {
       const a = needPin('reqOut'); if (!a) return;
       $('reqOut').innerHTML = '<div style="color:#1a73e8;font-weight:600;margin-top:8px">Loading…</div>';
       api('myrequests', { staffId: a.s.id, pin: a.pin }, 40000).then(r => {
         if (!r.ok) { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">' + esc(r.message) + '</div>'; return; }
         if (!r.requests.length) { $('reqOut').innerHTML = '<div style="font-size:13px;color:#667;margin-top:8px">No requests yet.</div>'; return; }
-        $('reqOut').innerHTML = r.requests.map(x => '<div class="pcard"><b>' + esc(x.typeLabel) + '</b> ' + chipFor(x.status) +
+        const tS = { LEAVE: 'Leave', SICK: 'Sick', CHANGE: 'Change sched', SWAP: 'Swap day', RESIGN: 'Resignation' };
+        const md = v => { const p = String(v || '').split('-'); return p.length < 3 ? esc(v || '') : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + ' ' + (+p[2]); };
+        const stS = st => st === 'APPROVED' || st === 'REHIRED' ? '<span class="chip a">Approved</span>' : st === 'DENIED' ? '<span class="chip d">Denied</span>' : '<span class="chip p">Pending</span>';
+        $('reqOut').innerHTML = '<div class="stlegend">Tap a row for details</div><table class="stbl"><thead><tr><th>Type</th><th>Date(s)</th><th>Status</th></tr></thead><tbody>' + r.requests.map(x =>
+          '<tr class="srow" onclick="myReqRow(\'' + x.id + '\')"><td><b>' + (tS[x.type] || esc(x.typeLabel)) + '</b></td><td>' + (x.type === 'RESIGN' ? 'Last day ' + md(x.to) : x.type === 'SWAP' ? 'Off ' + md(x.from) + '<br>Works ' + md(x.to) : md(x.from) + (x.to && x.to !== x.from ? '–' + md(x.to) : '')) + '</td><td>' + stS(x.status) + (x.note ? ' 💬' : '') + '</td></tr>' +
+          '<tr class="sdet myrq" id="mrq_' + x.id + '" style="display:none"><td colspan="3"><div class="sdbox"><b>' + esc(x.typeLabel) + '</b> ' + chipFor(x.status) +
           '<div style="font-size:13px;margin-top:4px">' + reqWhen(x) + '</div>' +
           '<div style="font-size:12px;color:#334;margin-top:2px">' + reasonHtml(x.reason) + '</div>' + (x.note ? '<div style="font-size:12px;margin-top:4px"><b>Admin:</b> ' + esc(x.note) + '</div>' : '') +
           (canReconsider(x) ? '<textarea id="rc_' + x.id + '" rows="2" maxlength="300" placeholder="Why could you not file at least 3 days ahead?"></textarea><button class="sbtn" onclick="reconsiderUI(\'' + x.id + '\')">🙏 Ask for reconsideration</button>' : '') +
-          '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Filed ' + esc(x.filedAt) + '</div></div>').join('');
+          '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Filed ' + esc(x.filedAt) + '</div></div></td></tr>').join('') + '</tbody></table>';
         refreshNotices();
       }).catch(e => { $('reqOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
     }
