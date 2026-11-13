@@ -265,7 +265,18 @@
 
       <!-- who-are-you card: moved into the open tab -->
       <div class="card" id="idcard">
-        <label for="staff">Who are you?</label>
+        <div id="loginBox" style="display:none">
+          <label for="liUser">Sign in</label>
+          <input id="liUser" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" placeholder="Username">
+          <input id="liPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="Access code" style="margin-top:8px" onkeydown="if(event.key==='Enter')signInUI()">
+          <button class="sbtn" id="liBtn" style="margin-top:8px" onclick="signInUI()">Sign in</button>
+          <div id="liMsg" style="font-size:13px;margin-top:8px"></div>
+        </div>
+        <div id="whoBox" style="display:none;align-items:center;justify-content:space-between;gap:8px">
+          <div style="font-size:14px">Signed in as <b id="whoName"></b></div>
+          <button class="sbtn gray" style="width:auto;margin:0;padding:8px 14px;font-size:13px" onclick="signOutUI()">Sign out</button>
+        </div>
+        <label for="staff" id="staffLbl">Who are you?</label>
         <select id="staff"><option value="">Loading staff…</option></select>
         <div class="fpstatus" id="fpstatus"></div>
         <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="Access code (PIN)">
@@ -450,7 +461,7 @@
           <button id="subHol" onclick="adminTab('hol')">📅 Holidays</button>
           <button id="subReq" onclick="adminTab('req')">📝 Requests<span id="bdgAReq"></span></button>
           <button id="subPsl" onclick="adminTab('psl')">✅ Payslips<span id="bdgAPsl"></span></button>
-          <button id="subStaff" onclick="adminTab('staff')">👥 Staff</button>
+          <button id="subStaff" onclick="adminTab('staff')">👥 Staff<span id="bdgAStf"></span></button>
           <button id="subSales" onclick="adminTab('sales')">📊 Sales<span id="bdgASal"></span></button>
         </div>
 
@@ -581,7 +592,7 @@
         signal: ctrl ? ctrl.signal : undefined
       }).then(r => r.text()).then(txt => {
         if (timer) clearTimeout(timer);
-        try { return JSON.parse(txt); }
+        try { const j = JSON.parse(txt); if (SIGNIN && j && action !== 'login' && (j.phoneBlocked || /^Wrong access code/.test(j.message || '')) && getSession()) setTimeout(() => signOutUI(j.phoneBlocked ? 'This phone is no longer approved for you. Please sign in again.' : 'Your access code was changed. Please sign in again.'), 0); return j; }
         catch (e) { throw new Error('Unexpected reply from server (' + txt.slice(0, 60).replace(/\s+/g, ' ') + ')'); }
       }).catch(e => {
         if (timer) clearTimeout(timer);
@@ -640,12 +651,56 @@
       onStaffChange(false);
       try { pinVisibility(); } catch (e) {}
     }
+
+    // ===================== SIGN-IN (username + access code) =====================
+    let SIGNIN = false; try { SIGNIN = localStorage.getItem('tcSignIn') === '1'; } catch (e) {}
+    function getSession() { try { return JSON.parse(localStorage.getItem('tcSession') || 'null'); } catch (e) { return null; } }
+    function setSignInMode(on) {
+      SIGNIN = on; try { localStorage.setItem('tcSignIn', on ? '1' : '0'); if (on) localStorage.removeItem('tcStaff'); } catch (e) {}
+      $('staffLbl').style.display = on ? 'none' : ''; $('staff').style.display = on ? 'none' : '';
+      if (!on) { $('loginBox').style.display = 'none'; $('whoBox').style.display = 'none'; }
+    }
+    function applySession() {
+      setSignInMode(true);
+      const ss = getSession();
+      if (ss && ss.id) {
+        staffList = [{ id: ss.id, name: ss.name, fp: ss.fp, temp: ss.temp, payslipOnly: ss.payslipOnly }];
+        $('staff').innerHTML = '<option value="' + esc(ss.id) + '">' + esc(ss.name) + '</option>'; $('staff').value = ss.id;
+        $('pin').value = ss.pin || '';
+        $('loginBox').style.display = 'none'; $('whoBox').style.display = 'flex'; $('whoName').textContent = ss.name;
+      } else {
+        staffList = []; $('staff').innerHTML = '<option value=""></option>'; $('staff').value = ''; $('pin').value = '';
+        $('loginBox').style.display = 'block'; $('whoBox').style.display = 'none';
+      }
+      onStaffChange(false); try { pinVisibility(); } catch (e) {}
+    }
+    function signInUI() {
+      const u = $('liUser').value.trim(), p = $('liPin').value.trim();
+      if (!u || !p) { $('liMsg').innerHTML = '<span style="color:#b00020">Enter your username and access code.</span>'; return; }
+      $('liMsg').innerHTML = '<span style="color:var(--sub)">Signing in…</span>'; $('liBtn').disabled = true;
+      api('login', { username: u, pin: p }, 40000).then(r => {
+        $('liBtn').disabled = false;
+        if (!r.ok) { $('liMsg').innerHTML = '<span style="color:' + (r.pending ? '#b45309' : '#b00020') + '">' + (r.pending ? '📱 ' : '') + esc(r.message) + '</span>'; return; }
+        const x = r.staff;
+        try { localStorage.setItem('tcSession', JSON.stringify({ id: x.id, name: x.name, fp: x.fp, temp: x.temp, payslipOnly: x.payslipOnly, pin: p })); } catch (e) {}
+        $('liUser').value = ''; $('liPin').value = ''; $('liMsg').innerHTML = '';
+        applySession(); refreshNotices();
+      }).catch(e => { $('liBtn').disabled = false; $('liMsg').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function signOutUI(msg) {
+      try { localStorage.removeItem('tcSession'); localStorage.removeItem('tcLastStaff'); } catch (e) {}
+      ['payslipsOut', 'reqOut', 'slOut'].forEach(k => { if ($(k)) $(k).innerHTML = ''; });
+      try { $('slip').innerHTML = ''; $('slip').style.display = 'none'; } catch (e) {}
+      applySession(); refreshNotices();
+      if (msg) $('liMsg').innerHTML = '<span style="color:#b00020">' + esc(msg) + '</span>';
+    }
     function cachedStaff() { try { const a = JSON.parse(localStorage.getItem('tcStaff') || 'null'); return Array.isArray(a) && a.length ? a : null; } catch (e) { return null; } }
     function loadStaff() {
       loadTries++;
       const st = $('fpstatus');
       const cached = cachedStaff();
-      if (loadTries === 1 && cached && !staffList.length) renderStaffOptions(cached); // instant start
+      if (loadTries === 1 && SIGNIN) applySession();
+      else if (loadTries === 1 && cached && !staffList.length) renderStaffOptions(cached); // instant start
       if (!staffList.length) {
         st.className = 'fpstatus yes';
         st.textContent = loadTries > 1 ? 'Connecting… (try ' + loadTries + ')' : 'Connecting to payroll…';
@@ -653,13 +708,15 @@
       api('staff').then(res => {
         if (!res || !res.ok) throw new Error((res && res.message) || 'Server error');
         applyDeact(res.deactivated || null);
+        setSignInMode(!!res.signIn);
+        if (SIGNIN) { st.className = 'fpstatus'; st.textContent = ''; applySession(); return; }
         if (!$('staff').value) { st.className = 'fpstatus'; st.textContent = ''; }
         const list = (res.staff || []).map(s => ({ id: s.id, name: s.name, fp: s.fp, temp: s.temp, payslipOnly: s.payslipOnly }));
         try { localStorage.setItem('tcStaff', JSON.stringify(list)); } catch (e) {}
         renderStaffOptions(list);
       }).catch(e => {
         if (loadTries < 3) { setTimeout(loadStaff, 2000); return; }
-        if (staffList.length) return; // names already shown from this phone; the next refresh will update them
+        if (staffList.length || SIGNIN) return; // names already shown from this phone; the next refresh will update them
         $('staff').innerHTML = '<option value="">Could not load — tap Retry below</option>';
         st.className = 'fpstatus no';
         st.innerHTML = 'Could not reach the payroll server.<br><small>' + esc(e.message) + ' · ' + esc(navigator.userAgent.slice(0, 80)) + '</small><br>' +
@@ -682,7 +739,7 @@
     let curTab = 'Home';
     function pinVisibility() {
       const s = currentStaff();
-      $('pin').style.display = (curTab === 'Home' && s && s.fp && !s.temp && !s.payslipOnly) ? 'none' : '';
+      $('pin').style.display = SIGNIN || (curTab === 'Home' && s && s.fp && !s.temp && !s.payslipOnly) ? 'none' : '';
     }
     showTab((location.hash.match(/tab=(Home|Rec|Pay|Req|Sal|Sch)/) || [])[1] || 'Home');
     // remember who uses this phone (regular staff only)
@@ -1329,8 +1386,8 @@
         applyDeact(n.deactivated || null);
         showReleaseDue(n.releaseDue || []);
         if (n.theme) applyTheme(n.theme);
-        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0) + (n.adminSales || 0));
-        badge('bdgASal', n.adminSales || 0);
+        badge('bdgAdmin', (n.adminPending || 0) + (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0) + (n.adminSales || 0) + (n.adminPhones || 0));
+        badge('bdgASal', n.adminSales || 0); badge('bdgAStf', n.adminPhones || 0);
         badge('bdgAReq', n.adminPending || 0); badge('bdgAPsl', (n.adminAccepted || 0) + (n.adminDrafts || 0) + (n.adminFinals || 0));
         if (!s) { $('staffNotice').style.display = 'none'; badge('bdgPay', 0); badge('bdgReq', 0); return; }
         badge('bdgPay', n.newPayslips || 0); badge('bdgReq', n.requestUpdates || 0);
@@ -1353,7 +1410,7 @@
 
     function needPin(outId) {
       const s = currentStaff(), pin = $('pin').value.trim();
-      if (!s || !pin) { $(outId).innerHTML = '<div style="color:#b00020;font-size:13px;margin-top:8px">Pick your name and enter your access code (PIN) above first.</div>'; return null; }
+      if (!s || !pin) { $(outId).innerHTML = '<div style="color:#b00020;font-size:13px;margin-top:8px">' + (SIGNIN ? 'Please sign in above first.' : 'Pick your name and enter your access code (PIN) above first.') + '</div>'; return null; }
       return { s: s, pin: pin };
     }
 
@@ -1387,6 +1444,9 @@
         '<div>' + (x.active
           ? b('✏️ Edit', "stEdit('" + x.id + "')") + b('🎲 Random code', "stResetPin('" + x.id + "')") + (temp ? '' : b('📱 Reset phone', "stResetPhone('" + x.id + "')")) + (temp ? '' : b(x.supervisor ? '⭐ Remove supervisor' : '⭐ Make supervisor', "stSup('" + x.id + "'," + (!x.supervisor) + ")")) + b('Remove', "stSetActive('" + x.id + "',false)", 'red')
           : b('Re-activate', "stSetActive('" + x.id + "',true)")) + '</div>' +
+        (x.pendingAt ? '<div class="ack-box" style="margin-top:8px">📱 <b>New phone request</b> (' + esc(x.pendingAt) + '). Approving replaces their old phone.<div class="row"><button class="btn green" style="margin-top:6px;padding:8px 0;font-size:13px" onclick="stPhoneUI(\'' + esc(x.id) + '\',true)">Approve new phone</button><button class="btn red" style="margin-top:6px;padding:8px 0;font-size:13px" onclick="stPhoneUI(\'' + esc(x.id) + '\',false)">Deny</button></div></div>' : '') +
+        '<div style="margin-top:8px;font-size:12.5px"><b>👤 Username:</b> ' + (x.username ? '<span class="stpin" style="letter-spacing:0">' + esc(x.username) + '</span>' : '<span style="color:#e11d48">not set</span>') + '</div>' +
+        '<div class="row" style="margin-top:4px"><input type="text" id="su_' + esc(x.id) + '" autocapitalize="none" placeholder="New username" value="' + esc(x.username || '') + '" style="flex:2;margin-top:0"><button class="btn" style="margin-top:0;flex:1;padding:8px 0;font-size:13px" onclick="stUserUI(\'' + esc(x.id) + '\')">Save username</button></div>' +
         (x.active ? '<div style="margin-top:8px;font-size:12.5px"><b>🔑 Access code:</b> ' + stPinSpan(x) + ' <span class="snone">(tap 👁 in the table header to show)</span></div>' +
           '<div class="row" style="margin-top:4px"><input type="text" id="sp_' + esc(x.id) + '" inputmode="numeric" maxlength="4" placeholder="Type new 4-digit code" style="flex:2;margin-top:0" oninput="this.value=this.value.replace(/\\D/g,\'\')"><button class="btn green" style="margin-top:0;flex:1;padding:8px 0;font-size:13px" onclick="stSetPinUI(\'' + esc(x.id) + '\')">Set code</button></div>' : '') +
         '<div id="stEd_' + esc(x.id) + '"></div></div>';
@@ -1397,6 +1457,18 @@
       stShowPins = !stShowPins; clearTimeout(stPinTimer);
       document.querySelectorAll('#stOut .stpin').forEach(e => e.textContent = stShowPins ? (e.dataset.pin || '—') : '••••');
       if (stShowPins) stPinTimer = setTimeout(() => { if (stShowPins) stRevealUI(); }, 30000);
+    }
+
+    function stUserUI(id) {
+      const v = ($('su_' + id).value || '').trim().toLowerCase();
+      amsg('stMsg', 'Saving…', true);
+      adminCall('setUsername', { id: id, username: v }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) loadAdminStaff(); }).catch(e => amsg('stMsg', 'Connection error — NOT saved. ' + e.message, false));
+    }
+    function stPhoneUI(id, approve) {
+      const x = stList.find(v => v.id === id); if (!x) return;
+      if (!confirm((approve ? 'Approve the new phone for ' : 'Deny the new-phone request of ') + x.name + '?' + (approve ? ' Their old phone will be signed out.' : ''))) return;
+      amsg('stMsg', 'Saving…', true);
+      adminCall('phoneDecide', { id: id, approve: approve }).then(r => { amsg('stMsg', r.message || '', r.ok); if (r.ok) { loadAdminStaff(); refreshNotices(); } }).catch(e => amsg('stMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
     function stSetPinUI(id) {
       const x = stList.find(v => v.id === id); if (!x) return;
@@ -1415,7 +1487,7 @@
         const amt = v => '₱' + (v % 1 ? Number(v).toFixed(2) : v);
         const rate = temp && x.dailyRate > 0 ? amt(x.dailyRate) + '/day' : amt(x.rate) + '/hr';
         const ph = temp ? (x.hostName ? esc(stShort(x.hostName)) + '’s' : '<span style="color:#e11d48">⚠️ none</span>') : (x.hasPhone ? '✅' : '<span style="color:#d97706">⚠️ not set</span>');
-        return '<tr class="srow"' + (x.active ? '' : ' style="opacity:.65"') + ' onclick="stRowUI(\'' + esc(x.id) + '\')"><td><b>' + esc(stShort(x.name)) + '</b>' + (x.supervisor ? ' ⭐' : '') + '</td><td>' + (temp ? '<span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : 'Regular') + '</td><td>' + rate + '</td><td>' + ph + '</td><td>' + stPinSpan(x) + '</td></tr>' +
+        return '<tr class="srow"' + (x.active ? '' : ' style="opacity:.65"') + ' onclick="stRowUI(\'' + esc(x.id) + '\')"><td><b>' + esc(stShort(x.name)) + '</b>' + (x.supervisor ? ' ⭐' : '') + (x.pendingAt ? ' <span class="chip p" style="font-size:10px;padding:1px 6px">📱 New phone</span>' : '') + '</td><td>' + (temp ? '<span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : 'Regular') + '</td><td>' + rate + '</td><td>' + ph + '</td><td>' + stPinSpan(x) + '</td></tr>' +
           '<tr class="sdet strow" id="str_' + esc(x.id) + '" style="display:none"><td colspan="5"><div class="sdbox">' + stCard(x) + '</div></td></tr>';
       }).join('') + '</tbody></table>';
     }
@@ -1557,7 +1629,7 @@
         if (r.ok && r.closed) {
           // temporary staff: hide everything and remove his name from this phone
           ['payslipsOut', 'reqOut'].forEach(k => { if ($(k)) $(k).innerHTML = ''; });
-          $('slip').innerHTML = ''; $('slip').style.display = 'none'; $('pin').value = ''; $('staff').value = '';
+          $('slip').innerHTML = ''; $('slip').style.display = 'none'; $('pin').value = ''; $('staff').value = ''; if (SIGNIN) { signOutUI(); return; }
           onStaffChange(true); loadStaff(); refreshNotices(); return;
         }
         if (r.ok) { loadMyPayslips(); refreshNotices(); }
