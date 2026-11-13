@@ -657,6 +657,7 @@
 
     // ===================== SIGN-IN (username + access code) =====================
     let SIGNIN = false; try { SIGNIN = localStorage.getItem('tcSignIn') === '1'; } catch (e) {}
+    function clearPin() { const ss = SIGNIN ? getSession() : null; $('pin').value = ss && ss.pin ? ss.pin : ''; }
     function getSession() { try { return JSON.parse(localStorage.getItem('tcSession') || 'null'); } catch (e) { return null; } }
     function setSignInMode(on) {
       SIGNIN = on; try { localStorage.setItem('tcSignIn', on ? '1' : '0'); if (on) localStorage.removeItem('tcStaff'); } catch (e) {}
@@ -773,7 +774,7 @@
     $('staff').addEventListener('change', () => onStaffChange(true));
     function onStaffChange(clear) {
       const s = currentStaff();
-      if (clear) { $('pin').value = ''; $('slip').style.display = 'none'; $('msg').className = 'msg'; }
+      if (clear) { clearPin(); $('slip').style.display = 'none'; $('msg').className = 'msg'; }
       pending = null; $('btnFinish').style.display = 'none';
       const has = !!s;
       ['btnIn', 'btnOut', 'btnCur', 'btnPrev'].forEach(id => $(id).disabled = !has);
@@ -839,6 +840,7 @@
     // ---- fingerprint registration (one time per phone) ----
     function registerFingerprint() {
       const s = currentStaff();
+      if (SIGNIN && !$('pin').value) clearPin();
       const pin = $('pin').value.trim();
       if (!s) return;
       if (!pin) { showMsg('Enter your PIN first, then tap Register.', false); return; }
@@ -864,7 +866,7 @@
       }).then(res => {
         setBusy(false);
         showMsg(res.message || (res.ok ? 'Registered.' : 'Registration failed.'), res.ok);
-        if (res.ok) { $('pin').value = ''; s.fp = true; onStaffChange(false); }
+        if (res.ok) { clearPin(); s.fp = true; onStaffChange(false); }
       }).catch(e => {
         setBusy(false);
         showMsg(e.name === 'NotAllowedError' ? 'Fingerprint registration was cancelled.' : ('Could not register: ' + e.message), false);
@@ -921,6 +923,7 @@
       if (!s || punching) return;
       warmUp();
       $('btnFinish').style.display = 'none';
+      if (SIGNIN && !$('pin').value) clearPin();
       if (!s.fp && !$('pin').value.trim()) { showMsg('Please enter your PIN (or register your phone first).', false); return; }
       if (s.fp && (!chal || chal.staffId !== s.id || Date.now() - chal.at > 4 * 60 * 1000)) {
         prefetchChallenge();
@@ -1001,7 +1004,7 @@
           .then(res => {
             punching = false; setBusy(false);
             punchResult(!!res.ok, res.message || (res.ok ? '' : 'The server did not accept the punch.'));
-            if (res.ok) $('pin').value = '';
+            if (res.ok) clearPin();
             if (res.finalPayslip) setTimeout(refreshNotices, 1500);
             prefetchChallenge();
           })
@@ -1009,7 +1012,7 @@
             $('spin').textContent = 'Checking if your punch was saved…';
             confirmPunch(s.id, p.type).then(st => {
               punching = false; setBusy(false); prefetchChallenge();
-              if (st) { punchResult(true, s.name + ' clocked ' + p.type + ' at ' + st.time + '.'); $('pin').value = ''; }
+              if (st) { punchResult(true, s.name + ' clocked ' + p.type + ' at ' + st.time + '.'); clearPin(); }
               else punchResult(false, /Failed to fetch|Unexpected reply|too long/i.test(e.message) ? 'The server did not answer. Please check your internet and try again.' : ('Error: ' + e.message));
             });
           });
@@ -1074,6 +1077,7 @@
       const sel = document.getElementById('recCut'); if (sel) sel.innerHTML = o;
     })();
     function viewSlip(which) {
+      if (SIGNIN && !$('pin').value) clearPin();
       const s = currentStaff();
       if (!s) return;
       const pin = $('pin').value.trim();
@@ -1116,7 +1120,7 @@
           '<div class="gross"><span>TOTAL HOURS WORKED</span><span>' + (p.totalHours || 0).toFixed(2) + '</span></div></div>' +
           '<div style="font-size:11px;color:#667;margin-top:6px">Hours counted for pay: after late rounding, store/shift closing time and the unpaid break.</div>' +
           (p.incomplete - onShift > 0 ? '<div class="warn">' + (p.incomplete - onShift) + ' day(s) missing IN or OUT. Please tell the admin.</div>' : '');
-        $('pin').value = '';
+        clearPin();
         return;
       }
       let rows = '';
@@ -1143,7 +1147,7 @@
         (p.days.some(d => d.tag) ? '<div style="font-size:10px;color:#889;margin-top:3px">RH = regular holiday, SNH = special non-working</div>' : '') +
         '<div class="totals">' + lines + '</div>' +
         (p.incomplete ? '<div class="warn">' + p.incomplete + ' day(s) missing IN or OUT — not counted. Ask admin to fix TimeLog.</div>' : '');
-      $('pin').value = '';
+      clearPin();
     }
     // ===================== ADMIN TAB =====================
     let adminCode = '';
@@ -1285,6 +1289,7 @@
     function shortShift(v) { const p = v.split('-'); return shortTime(p[0]) + '–' + shortTime(p[1]); }
     function firstName(n) { return String(n).split(' ')[0]; }
     function loadWorkSched(which) {
+      if (SIGNIN && !$('pin').value) clearPin();
       const s = currentStaff(), pin = $('pin').value.trim();
       if (!s || !pin) { $('wsOut').innerHTML = '<span style="color:#b00020">Pick your name and enter your access code (PIN) above, then tap This Cutoff or Next Cutoff.</span>'; return; }
       $('wsOut').innerHTML = 'Loading schedule…';
@@ -1431,6 +1436,7 @@
     setInterval(refreshNotices, 180000);
 
     function needPin(outId) {
+      if (SIGNIN && !$('pin').value) clearPin();
       const s = currentStaff(), pin = $('pin').value.trim();
       if (!s || !pin) { $(outId).innerHTML = '<div style="color:#b00020;font-size:13px;margin-top:8px">' + (SIGNIN ? 'Please sign in above first.' : 'Pick your name and enter your access code (PIN) above first.') + '</div>'; return null; }
       return { s: s, pin: pin };
