@@ -109,6 +109,7 @@
     .rqtbl .rqpend td:first-child { box-shadow: inset 3px 0 0 var(--pink); } .rqtbl .rqpend { background: rgba(236,72,153,.06); }
     .chip.pwait { background: #dbeafe; color: #1e40af; } html.dark .chip.pwait { background: #1e2a4a; color: #93b4ff; }
     .stEye { cursor: pointer; text-decoration: none; font-size: 13px; } .stpin { font-family: ui-monospace, monospace; letter-spacing: 1px; font-weight: 700; }
+    .ack-box { margin-top: 10px; padding: 10px; border-radius: 12px; background: #fdf0f5; border: 1px solid #f7c6da; font-size: 13px; } html.dark .ack-box { background: #2a1f26; border-color: #4a2a3a; }
     .stlegend { font-size: 11px; color: var(--sub); margin: 12px 2px 4px; }
     .stbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
     .stbl > thead > tr > th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--sub); padding: 8px 6px; border-bottom: 1px solid var(--line); background: #faf7f9; }
@@ -314,7 +315,7 @@
         <div class="idslot"></div>
         <div class="wsched">
           <h2>💵 My payslips</h2>
-          <div class="hint">Your payslip appears here after the admin releases it (target: 12:00 noon on the 16th and the 1st). Check it and tap <b>Accept</b>.</div>
+          <div class="hint">Your payslip appears here after the admin releases it (target: 12:00 noon on the 16th and the 1st). Check it, sign with your finger, and tap <b>Sign &amp; accept</b>.</div>
           <button class="sbtn" onclick="loadMyPayslips()">View my payslips</button>
           <div id="payslipsOut"></div>
         </div>
@@ -1519,13 +1520,39 @@
         $('payslipsOut').innerHTML = r.payslips.map(x => '<div class="pcard"><b>' + (x.final ? 'Final payslip: ' + esc(x.period) : esc(x.start) + ' to ' + esc(x.end)) + '</b> ' +
           (x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip p">Waiting for your acceptance</span>') +
           (x.slip ? staffSlipHtml(x.slip) : '') +
-          (x.status !== 'ACCEPTED' ? '<button class="sbtn green" onclick="acceptSlipUI(\'' + x.start + '\')">✅ I checked it — Accept payslip</button>' : '') + '</div>').join('');
+          (x.status !== 'ACCEPTED'
+            ? '<div class="ack-box">✍️ I have checked this payslip, I agree with it, and I acknowledge receipt of <b>' + peso(x.slip ? x.slip.grossPay : 0) + '</b>.</div>' + sigPadHtml('sg_' + x.start, 'Sign here with your finger') +
+              '<button class="sbtn green" onclick="acceptSlipUI(\'' + x.start + '\')">✍️ Sign &amp; accept payslip</button>'
+            : (x.signed ? '<button class="sbtn gray" style="margin-top:8px" onclick="mySignedSlipUI(\'' + x.start + '\')">📄 View signed payslip</button>' : '')) + '</div>').join('');
+        r.payslips.forEach(x => { if (x.status !== 'ACCEPTED') setTimeout(() => sigInit('sg_' + x.start), 60); });
       }).catch(e => { $('payslipsOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
     }
+
+    function pdfViewer(title, promise) {
+      let m = $('sViewer');
+      if (!m) { m = document.createElement('div'); m.id = 'sViewer'; m.className = 'sviewer'; m.onclick = e => { if (e.target === m) m.style.display = 'none'; }; document.body.appendChild(m); }
+      m.innerHTML = '<div class="svbox"><div class="svhead"><b>' + esc(title) + '</b><button onclick="$(\'sViewer\').style.display=\'none\'">✕</button></div><div class="svbody">Loading… (about 5 seconds)</div></div>';
+      m.style.display = 'flex';
+      const body = m.querySelector('.svbody');
+      promise.then(r => {
+        if (!r.ok) { body.innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        const bin = atob(r.data), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([u], { type: r.mime }));
+        body.innerHTML = '<a href="' + url + '" target="_blank" rel="noopener" class="sbtn" style="display:block;text-align:center;text-decoration:none;color:#fff;padding:12px 0">📄 Open signed payslip (PDF)</a>' +
+          '<a href="' + url + '" download="' + esc(r.name || 'Signed payslip.pdf') + '" class="sbtn gray" style="display:block;text-align:center;text-decoration:none;padding:12px 0;margin-top:8px">⬇️ Download</a>';
+      }).catch(e => { body.innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function mySignedSlipUI(start) {
+      const a = needPin('payslipsOut'); if (!a) return;
+      pdfViewer('Signed payslip · ' + start, api('mysignedslip', { staffId: a.s.id, pin: a.pin, start: start }, 60000));
+    }
+    function adminSignedSlipUI(id, start, name) { pdfViewer('Signed payslip · ' + name, adminCall('signedSlip', { staffId: id, start: start }, 90000)); }
     function acceptSlipUI(start) {
       const a = needPin('payslipsOut'); if (!a) return;
-      if (!confirm('Accept your payslip for the cutoff starting ' + start + '? Your salary will then be processed.')) return;
-      api('acceptpayslip', { staffId: a.s.id, pin: a.pin, start: start }, 40000).then(r => {
+      const sig = sigData('sg_' + start);
+      if (!sig) return alert('Please sign in the box first. Your signature confirms you agree with and received this payslip.');
+      if (!confirm('Sign and accept your payslip for the cutoff starting ' + start + '?')) return;
+      api('acceptpayslip', { staffId: a.s.id, pin: a.pin, start: start, sig: sig }, 60000).then(r => {
         alert(r.message || (r.ok ? 'Accepted.' : 'Not accepted.'));
         if (r.ok && r.closed) {
           // temporary staff: hide everything and remove his name from this phone
@@ -2247,14 +2274,15 @@
         if (drafts) h += '<button class="btn green" onclick="releaseUI(\'all\')">Release all ' + drafts + ' reviewed payslips</button>';
         h += '<div class="stlegend">Tap a row to view the payslip, adjust, or release</div><table class="stbl rqtbl"><thead><tr><th>Staff</th><th>Days</th><th>Gross pay</th><th>Status</th></tr></thead><tbody>';
         d.rows.forEach(x => {
-          const st = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted</span>' : '<span class="chip pwait">Waiting</span>';
+          const st = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">' + (x.signed ? '✍️ Signed' : 'Accepted') + '</span>' : '<span class="chip pwait">Waiting</span>';
           const tag = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px">Temp</span>' : x.kind === 'FINAL' ? ' <span class="chip" style="background:#fde2e8;color:#9f1239;font-size:10px;padding:1px 6px">Final</span>' : '';
           const full = x.status === 'DRAFT' ? '<span class="chip p">For review</span>' : x.status === 'ACCEPTED' ? '<span class="chip a">Accepted ' + esc(x.acceptedAt) + '</span>' : '<span class="chip d" style="background:#dbeafe;color:#1e40af">' + (x.kind === 'TEMP-FINAL' ? 'Sent automatically' : 'Released') + ' – waiting for acceptance</span>';
           const fin = x.kind === 'TEMP-FINAL' ? ' <span class="chip" style="background:#fef3c7;color:#92400e">Temporary – final ' + esc(x.period) + '</span>' : x.kind === 'FINAL' ? ' <span class="chip" style="background:#fde2e8;color:#9f1239">Final pay – resigned ' + esc(x.period) + '</span>' : '';
           h += '<tr class="srow' + (x.status === 'DRAFT' ? ' rqpend' : '') + '" onclick="toggleSlip(\'' + x.staffId + '\')"><td><b>' + esc((w => /\.$/.test(w[0]) && w[1] ? w[0] + ' ' + w[1] : w[0])(String(x.name).split(' '))) + '</b>' + tag + (x.isNew ? ' <span class="chip a" style="font-size:10px;padding:1px 6px">new</span>' : '') + '</td><td>' + (x.slip ? x.slip.daysWorked : '') + '</td><td><b>' + peso(x.slip ? x.slip.finalGross : 0) + '</b></td><td>' + st + '</td></tr>' +
             '<tr class="sdet pslrow" id="ps_' + x.staffId + '" style="display:' + (openId === x.staffId ? '' : 'none') + '"><td colspan="4"><div class="sdbox"><b>' + esc(x.name) + '</b> ' + full + fin + adminSlipHtml(x) +
             (x.status !== 'ACCEPTED' ? adjEditorHtml(x) : '') +
-            (x.status === 'DRAFT' ? '<button class="btn green" onclick="releaseUI([\'' + x.staffId + '\'])">Release to ' + esc(x.name.split(' ')[0]) + '</button>' : '') + '</div></td></tr>';
+            (x.status === 'DRAFT' ? '<button class="btn green" onclick="releaseUI([\'' + x.staffId + '\'])">Release to ' + esc(x.name.split(' ')[0]) + '</button>' : '') +
+            (x.status === 'ACCEPTED' ? (x.signed ? '<button class="btn" style="margin-top:8px" onclick="adminSignedSlipUI(\'' + x.staffId + '\',\'' + d.start + '\',\'' + esc(x.name).replace(/'/g, '') + '\')">📄 View signed payslip</button>' : '<div class="note">Accepted before signatures were required — no signed copy.</div>') : '') + '</div></td></tr>';
         });
         h += '</tbody></table>';
         $('aPslOut').innerHTML = h;
