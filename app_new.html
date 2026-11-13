@@ -32,10 +32,11 @@
     .hint { font-size: 13px; color: var(--sub); margin-top: 4px; line-height: 1.4; }
     h1.big { font-size: 30px; font-weight: 800; letter-spacing: -.5px; margin: 18px 2px 0; }
     label, .lbl { display: block; font-size: 12px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: .5px; margin: 0 0 6px 2px; }
-    select, #pin, .wsched input, .wsched select, .wsched textarea { width: 100%; padding: 14px 14px; font-size: 16px; border: 1.5px solid var(--line); border-radius: 14px; background: #fafafc; color: var(--ink); font-family: inherit; -webkit-appearance: none; appearance: none; }
+    select, #pin, #liUser, #liPin, .wsched input, .wsched select, .wsched textarea { width: 100%; padding: 14px 14px; font-size: 16px; border: 1.5px solid var(--line); border-radius: 14px; background: #fafafc; color: var(--ink); font-family: inherit; -webkit-appearance: none; appearance: none; }
     select { background-image: linear-gradient(45deg, transparent 50%, #9a9aa6 50%), linear-gradient(135deg, #9a9aa6 50%, transparent 50%); background-position: calc(100% - 20px) 52%, calc(100% - 14px) 52%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 36px; }
-    select:focus, #pin:focus, .wsched input:focus, .wsched textarea:focus { outline: none; border-color: var(--pink); background: #fff; }
+    select:focus, #pin:focus, #liUser:focus, #liPin:focus, .wsched input:focus, .wsched textarea:focus { outline: none; border-color: var(--pink); background: #fff; }
     .wsched input, .wsched select, .wsched textarea { margin-top: 8px; font-size: 15px; padding: 12px; }
+    #liUser, #liPin { display: block; margin-top: 8px; } #liPin { letter-spacing: 4px; } #liPin::placeholder { letter-spacing: 0; }
     #pin { letter-spacing: 6px; text-align: center; margin-top: 10px; }
     #pin::placeholder { letter-spacing: 0; font-size: 14px; }
     button { flex: 1; padding: 16px 0; font-size: 17px; font-weight: 700; border: none; border-radius: 16px; color: #fff; cursor: pointer; transition: transform .08s, opacity .2s; }
@@ -175,7 +176,7 @@
     html.dark body { background: var(--bg); color: var(--ink); }
     html.dark .hdr { background: rgba(0,0,0,.92); border-bottom: 1px solid #1d1d24; }
     html.dark .card, html.dark .wsched, html.dark .slip, html.dark .pcard { background: #17171c; box-shadow: none; border: 1px solid #22222a; }
-    html.dark select, html.dark #pin, html.dark .wsched input, html.dark .wsched select, html.dark .wsched textarea, html.dark .adm input, html.dark .adm select { background-color: #202027; border-color: #2e2e38; color: var(--ink); color-scheme: dark; }
+    html.dark select, html.dark #pin, html.dark #liUser, html.dark #liPin, html.dark .wsched input, html.dark .wsched select, html.dark .wsched textarea, html.dark .adm input, html.dark .adm select { background-color: #202027; border-color: #2e2e38; color: var(--ink); color-scheme: dark; }
     html.dark select:focus, html.dark #pin:focus, html.dark .wsched input:focus, html.dark .wsched textarea:focus { background-color: #24242c; }
     html.dark .loc { background: #1c1c22; box-shadow: none; color: #ff4d8d !important; font-weight: 600; border: 1px solid #3a0f22; }
     html.dark #locstatus[style*="176, 0, 32"] { color: #ffc24d !important; background: #3a2a10; border-color: #5a4010; }
