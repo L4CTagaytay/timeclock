@@ -415,7 +415,7 @@
           </details>
         </div>
         <div class="wsched">
-          <h2>↩️ Returned to you</h2>
+          <h2>↩️ Returned by the admin</h2>
           <div class="hint">Submitted reports and deposits go straight to the admin and can't be viewed here. If the admin returns one to you, it shows here with the admin's note so you can submit it again.</div>
           <button class="sbtn gray" onclick="loadSales()">Check returned items &amp; deposit dates</button>
           <div id="slOut"></div>
@@ -1611,7 +1611,7 @@
     // ===================== STAFF PAYSLIPS =====================
     function staffSlipHtml(p) {
       let rows = '';
-      p.days.forEach(d => { const lm = lateMins(d); rows += '<tr><td' + (lm ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + (lm ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td><td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>'; });
+      p.days.forEach(d => { const lm = lateMins(d); rows += '<tr><td' + (lm ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + (d.adm ? '<div style="font-size:10px;color:#2563eb">✎ added by admin</div>' : '') + (lm ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td><td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>'; });
       let t = '<div><span>Days worked</span><span>' + p.daysWorked + '</span></div>' +
         '<div><span>Regular: ' + p.regHours.toFixed(2) + ' h × ' + peso(p.rate) + '</span><span>' + peso(p.regPay) + '</span></div>' +
         '<div><span>OT: ' + p.otHours.toFixed(2) + ' h × ' + peso(p.rate) + ' × ' + p.otMult + '</span><span>' + peso(p.otPay) + '</span></div>';
@@ -1717,6 +1717,22 @@
     // ===================== DAILY SALES + DEPOSITS =====================
     const pesoStr = n => '₱' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     function salFold(d) { if (d.open) document.querySelectorAll('details.salfold').forEach(x => { if (x !== d) x.open = false; }); }
+
+    function fixReturnedUI(k) {
+      const x = (window.__ret || [])[k]; if (!x) return;
+      const folds = document.querySelectorAll('details.salfold');
+      if (x.kind === 'deposit') {
+        folds[1].open = true; salFold(folds[1]);
+        const sel = $('dpSales'); if (![...sel.options].some(o => o.value === x.date)) sel.insertAdjacentHTML('beforeend', '<option value="' + esc(x.date) + '">' + esc(x.date) + '</option>');
+        sel.value = x.date; $('dpDate').value = x.depDate || ''; $('dpAmount').value = x.amount != null ? x.amount : ''; $('dpRef').value = x.ref || ''; $('dpFile').value = '';
+        folds[1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        folds[0].open = true; salFold(folds[0]);
+        $('slDate').value = x.date; $('slTotal').value = x.total != null ? x.total : ''; $('slNotes').value = x.notes || ''; $('slFile').value = '';
+        folds[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      alert('The form is filled in with the returned entry. Correct what the admin asked, attach the new ' + (x.kind === 'deposit' ? 'deposit slip' : 'screenshot') + ', then tap Submit.');
+    }
     function salesTabInit() {
       const t = todayISO();
       if (!$('slDate').value) $('slDate').value = t;
@@ -1733,7 +1749,11 @@
         sel.innerHTML = '<option value="">— Pick the sales date —</option>' + (r.depositDates || []).map(d => '<option value="' + d + '">' + d + '</option>').join('');
         if (keep) sel.value = keep;
         const ret = r.returned || [];
-        $('slOut').innerHTML = ret.length ? ret.map(x => '<div class="pcard"><b>' + (x.kind === 'deposit' ? '🏦 Deposit for sales date ' : '📊 Sales report for ') + esc(x.date) + '</b> <span class="chip d">Returned</span><div style="font-size:13px;margin-top:4px"><b>Admin:</b> ' + esc(x.note || '') + '</div><div class="hint">Please submit it again above' + (x.kind === 'deposit' ? ' (pick ' + esc(x.date) + ' as the sales date).' : ' with the same sales date.') + '</div></div>').join('')
+        window.__ret = ret;
+        $('slOut').innerHTML = ret.length ? ret.map((x, k) => '<div class="pcard"><b>' + (x.kind === 'deposit' ? '🏦 Deposit for sales date ' : '📊 Sales report for ') + esc(x.date) + '</b> <span class="chip d">Returned</span>' + (x.byName ? '<div style="font-size:12px;color:var(--sub)">Submitted by ' + esc(x.byName) + '</div>' : '') +
+          '<div style="font-size:13px;margin-top:4px"><b>Admin:</b> ' + esc(x.note || '') + '</div>' +
+          '<div style="font-size:12.5px;margin-top:4px">' + (x.kind === 'deposit' ? 'Amount ' + pesoStr(x.amount) + (x.depDate ? ' · deposited ' + esc(x.depDate) : '') + (x.ref ? ' · ref ' + esc(x.ref) : '') : 'Total ' + pesoStr(x.total) + (x.notes ? ' · ' + esc(x.notes) : '')) + '</div>' +
+          '<button class="sbtn" style="margin-top:8px" onclick="fixReturnedUI(' + k + ')">✏️ Correct &amp; resubmit</button></div>').join('')
           : '<div class="hint" style="margin-top:8px">✅ Nothing returned to you.' + ((r.depositDates || []).length ? ' Sales dates waiting for a deposit are loaded in the deposit form.' : '') + '</div>';
       }).catch(e => { $('slOut').innerHTML = '<div style="color:#b00020;margin-top:8px">Connection error: ' + esc(e.message) + '</div>'; });
     }
@@ -2349,7 +2369,8 @@
       const full = !p.released;
       let rows = '';
       p.days.forEach(d => {
-        rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + '</td>' +
+        const fixBtn = full && (d.missing || d.note === 'missing punch') ? '<button class="btn" style="margin:4px 0 0;padding:4px 8px;width:auto;font-size:11px" onclick="addPunchUI(\'' + r.staffId + '\',\'' + d.date + '\',\'' + (d.inMin == null ? 'IN' : 'OUT') + '\')">➕ Add time ' + (d.inMin == null ? 'in' : 'out') + '</button>' : '';
+        rows += '<tr><td>' + esc(d.date.slice(5)) + (d.tag ? ' <b style="color:#b45309">' + esc(d.tag) + '</b>' : '') + (d.adm ? ' <span style="font-size:10px;color:#2563eb">✎ admin</span>' : '') + fixBtn + '</td>' +
           (full ? (function () { const lm = (String(d.adj || '').match(/Late (\d+)m/) || [])[1]; const late = lm && +lm > 1;
             return '<td' + (late ? ' style="color:#dc2626;font-weight:700;background:#fef2f2"' : '') + '>' + esc(d.in || '') + (late ? '<div style="font-size:10px">late ' + lm + ' min</div>' : '') + '</td><td>' + esc(d.out || '') + '</td>'; })() : '') +
           '<td class="r">' + (d.note ? '<span style="color:#b00020">' + esc(d.note) + '</span>' : d.hours.toFixed(2)) + '</td><td class="r">' + (d.note ? '' : d.ot.toFixed(2)) + '</td></tr>';
@@ -2368,6 +2389,16 @@
       return '<table><tr><th>Date</th>' + (full ? '<th>In</th><th>Out</th>' : '') + '<th class="r">Hrs</th><th class="r">OT</th></tr>' + rows + '</table>' +
         (p.incomplete ? '<div style="color:#b00020;font-size:12px;margin-top:4px">⚠ ' + p.incomplete + ' day(s) with a missing IN or OUT — not paid. Fix the TimeLog, then reopen this payslip.</div>' : '') +
         '<div class="tl" style="margin-top:6px">' + t + '</div>';
+    }
+
+    function addPunchUI(staffId, date, type) {
+      const t = prompt('Enter the TIME ' + type + ' for ' + date + ' (24-hour, e.g. ' + (type === 'OUT' ? '21:05' : '10:00') + '):');
+      if (t === null) return;
+      const v = t.trim().replace(/\./g, ':').replace(/^(\d{1,2})(\d{2})$/, '$1:$2');
+      if (!/^\d{1,2}:\d{2}$/.test(v)) return alert('Please enter the time like 21:05.');
+      amsg('aPslMsg', 'Saving…', true);
+      adminCall('addPunch', { staffId: staffId, date: date, type: type, time: v }).then(r => { amsg('aPslMsg', r.message || '', r.ok); if (r.ok) loadAdminPayslips(pslData && pslData.detail ? pslData.detail.start : '', staffId); })
+        .catch(e => amsg('aPslMsg', 'Connection error — NOT saved. ' + e.message, false));
     }
     function adjEditorHtml(r) {
       const adj = (r.adjustments || []).concat([{ label: '', amount: '' }]);
