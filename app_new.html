@@ -581,7 +581,14 @@
     }
     try { const d0 = JSON.parse(localStorage.getItem('tcDeact') || 'null'); if (d0) applyDeact(d0); } catch (e) {}
     const DEVICE_ID = (function () {
-      try { let d = localStorage.getItem('tcDeviceId'); if (!d) { d = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('tcDeviceId', d); } return d; }
+      try {
+        let d = localStorage.getItem('tcDeviceId');
+        if (!d) { const m = document.cookie.match(/(?:^|; )tcDev=([a-z0-9]+)/); if (m) d = m[1]; }
+        if (!d) d = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('tcDeviceId', d);
+        document.cookie = 'tcDev=' + d + '; max-age=' + (60 * 60 * 24 * 3650) + '; path=/; SameSite=Lax; Secure';
+        return d;
+      }
       catch (e) { return ''; }
     })();
 
@@ -684,12 +691,33 @@
       $('liMsg').innerHTML = '<span style="color:var(--sub)">Signing in…</span>'; $('liBtn').disabled = true;
       api('login', { username: u, pin: p }, 40000).then(r => {
         $('liBtn').disabled = false;
-        if (!r.ok) { $('liMsg').innerHTML = '<span style="color:' + (r.pending ? '#b45309' : '#b00020') + '">' + (r.pending ? '📱 ' : '') + esc(r.message) + '</span>'; return; }
+        if (!r.ok) {
+          $('liMsg').innerHTML = '<span style="color:' + (r.pending ? '#b45309' : '#b00020') + '">' + (r.pending ? '📱 ' : '') + esc(r.message) + '</span>' +
+            (r.pending && r.fp && window.PublicKeyCredential ? '<button class="sbtn" style="margin-top:8px" onclick="relinkUI(\'' + esc(r.staffId) + '\')">👆 Same phone — confirm with fingerprint</button>' : '');
+          return;
+        }
         const x = r.staff;
         try { localStorage.setItem('tcSession', JSON.stringify({ id: x.id, name: x.name, fp: x.fp, temp: x.temp, payslipOnly: x.payslipOnly, category: x.category || '', pin: p })); } catch (e) {}
         $('liUser').value = ''; $('liPin').value = ''; $('liMsg').innerHTML = '';
         applySession(); refreshNotices();
       }).catch(e => { $('liBtn').disabled = false; $('liMsg').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+
+    function relinkUI(staffId) {
+      const u = $('liUser').value.trim(), p = $('liPin').value.trim();
+      if (!u || !p) { $('liMsg').innerHTML = '<span style="color:#b00020">Enter your username and access code first.</span>'; return; }
+      $('liMsg').innerHTML = '<span style="color:var(--sub)">Getting ready…</span>';
+      api('challenge', { staffId: staffId }, 30000).then(c => {
+        if (!c || !c.ok) throw new Error((c && c.message) || 'Could not start the fingerprint check.');
+        return navigator.credentials.get({ publicKey: { challenge: b64uToBuf(c.challenge), rpId: location.hostname, allowCredentials: c.credIds.map(id => ({ type: 'public-key', id: b64uToBuf(id) })), userVerification: 'required', timeout: 60000 } });
+      }).then(a => api('relink', { username: u, pin: p, assertion: { credId: bufToB64u(a.rawId), clientDataJSON: bufToB64u(a.response.clientDataJSON), authenticatorData: bufToB64u(a.response.authenticatorData), signature: bufToB64u(a.response.signature) } }, 40000))
+        .then(r => {
+          if (!r.ok) { $('liMsg').innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+          const x = r.staff;
+          try { localStorage.setItem('tcSession', JSON.stringify({ id: x.id, name: x.name, fp: x.fp, temp: x.temp, payslipOnly: x.payslipOnly, category: x.category || '', pin: p })); } catch (e) {}
+          $('liUser').value = ''; $('liPin').value = ''; $('liMsg').innerHTML = '';
+          applySession(); refreshNotices(); alert('✅ ' + (r.message || 'Phone confirmed.'));
+        }).catch(e => { $('liMsg').innerHTML = '<span style="color:#b00020">' + esc(e.name === 'NotAllowedError' ? 'Fingerprint was cancelled or not recognised. The admin can still approve this phone.' : e.message) + '</span>'; });
     }
     function signOutUI(msg) {
       try { localStorage.removeItem('tcSession'); localStorage.removeItem('tcLastStaff'); } catch (e) {}
