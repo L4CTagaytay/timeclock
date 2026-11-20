@@ -466,6 +466,7 @@
           <button id="subPsl" onclick="adminTab('psl')">✅ Payslips<span id="bdgAPsl"></span></button>
           <button id="subStaff" onclick="adminTab('staff')">👥 Staff<span id="bdgAStf"></span></button>
           <button id="subSales" onclick="adminTab('sales')">📊 Sales<span id="bdgASal"></span></button>
+          <button id="subLog" onclick="adminTab('log')">🕒 Time log</button>
         </div>
 
         <div class="card" id="tabPay">
@@ -506,6 +507,14 @@
           <details style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;font-weight:700">⏩ Open review early</summary>
           <div class="note">Only if you want to start reviewing the current cutoff before its last day ends.</div>
           <div class="row"><select id="relCut"></select><button class="btn gray" style="margin-top:0" onclick="releaseNowUI()">Open review</button></div></details>
+        </div>
+
+        <div class="card" id="tabLog" style="display:none">
+          <b>Time log</b>
+          <div class="note">Every TIME IN / OUT with selfie and location. Saved in the TimeLog sheet; selfies are in Drive "Timeclock Selfies".</div>
+          <div class="row"><input type="date" id="tlDate"><button class="btn" style="margin-top:0" onclick="loadTimeLog()">Show</button></div>
+          <div class="row" style="margin-top:4px"><button class="btn gray" style="margin-top:0;padding:8px 0;font-size:13px" onclick="tlShift(-1)">‹ Previous day</button><button class="btn gray" style="margin-top:0;padding:8px 0;font-size:13px" onclick="tlShift(1)">Next day ›</button></div>
+          <div id="tlOut" class="note"></div>
         </div>
 
         <div class="card" id="tabSales" style="display:none">
@@ -1219,10 +1228,11 @@
       $('payOut').innerHTML = 'Pick a month and tap Show.';
     }
     function adminTab(t) {
-      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl'], ['staff', 'tabStaff', 'subStaff'], ['sales', 'tabSales', 'subSales']].forEach(x => {
+      [['pay', 'tabPay', 'subPay'], ['sched', 'tabSched', 'subSched'], ['hours', 'tabHours', 'subHours'], ['hol', 'tabHol', 'subHol'], ['req', 'tabReq', 'subReq'], ['psl', 'tabPsl', 'subPsl'], ['staff', 'tabStaff', 'subStaff'], ['sales', 'tabSales', 'subSales'], ['log', 'tabLog', 'subLog']].forEach(x => {
         $(x[1]).style.display = x[0] === t ? 'block' : 'none';
         $(x[2]).className = x[0] === t ? 'on' : '';
       });
+      if (t === 'log') { if (!$('tlDate').value) $('tlDate').value = todayISO(); loadTimeLog(); }
       if (t === 'hours') loadHours();
       if (t === 'hol') loadHolidays();
       if (t === 'req') loadAdminRequests();
@@ -1872,6 +1882,34 @@
         const bin = atob(r.data), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         const url = URL.createObjectURL(new Blob([u], { type: r.mime }));
         body.innerHTML = /^image\//.test(r.mime) ? '<img src="' + url + '">' : '<a href="' + url + '" target="_blank" rel="noopener" class="sbtn" style="display:block;text-align:center;text-decoration:none;color:#fff;padding:12px 0">Open PDF</a>';
+      }).catch(e => { body.innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+
+    function tlShift(n) { const d = new Date(($('tlDate').value || todayISO()) + 'T12:00:00'); d.setDate(d.getDate() + n); $('tlDate').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); loadTimeLog(); }
+    function loadTimeLog() {
+      $('tlOut').innerHTML = 'Loading…';
+      adminCall('timeLog', { date: $('tlDate').value }, 60000).then(r => {
+        if (!r.ok) { $('tlOut').innerHTML = '<span style="color:#b00020">' + esc(r.message || 'Could not load.') + '</span>'; return; }
+        if (!r.rows.length) { $('tlOut').innerHTML = '<div class="note">No TIME IN / OUT on ' + esc(r.date) + '.</div>'; return; }
+        const onS = r.rows.filter(x => x.status === 'onshift').length, miss = r.rows.filter(x => x.status === 'missing').length;
+        const cell = (p, kind) => !p ? (kind === 'OUT' ? '' : '—') : '<b>' + esc(p.time) + '</b>' + (p.method === 'Admin' ? ' <span style="font-size:10px;color:#2563eb">✎ admin</span>' : '') +
+          '<div style="font-size:11px">' + (p.selfie ? '<a class="sview" onclick="tlSelfie(\'' + p.selfie + '\',\'' + kind + ' ' + esc(p.time) + '\')">📷 View</a>' : '') + (p.map ? ' <a class="sview" href="' + esc(p.map) + '" target="_blank" rel="noopener">📍 Map</a>' : (p.method === 'Admin' ? '' : ' <span class="snone">no loc.</span>')) + '</div>';
+        let h = '<div class="stlegend"><b>' + esc(r.date) + '</b>' + (r.date === r.today ? ' (today)' : '') + ' · ' + r.rows.length + ' staff' + (onS ? ' · <b style="color:#2563eb">' + onS + ' on shift</b>' : '') + (miss ? ' · <b style="color:#e11d48">' + miss + ' missing TIME OUT</b>' : '') + '</div>';
+        h += '<table class="stbl"><thead><tr><th>Staff</th><th>IN</th><th>OUT</th><th>Hrs</th></tr></thead><tbody>' + r.rows.map(x =>
+          '<tr><td><b>' + esc(stShort(x.name)) + '</b></td><td>' + cell(x.inP, 'IN') + '</td><td>' + (x.outP ? cell(x.outP, 'OUT') : x.status === 'onshift' ? '<span class="chip pwait">On shift</span>' : '<span class="chip d">Missing</span>') + '</td><td>' + (x.hours != null ? x.hours.toFixed(1) : '') + '</td></tr>').join('') + '</tbody></table>';
+        if (miss) h += '<div class="note">To add a missing TIME OUT: Admin → Payslips → open the staff member → ➕ Add time out.</div>';
+        $('tlOut').innerHTML = h;
+      }).catch(e => { $('tlOut').innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
+    }
+    function tlSelfie(id, label) {
+      let m = $('sViewer');
+      if (!m) { m = document.createElement('div'); m.id = 'sViewer'; m.className = 'sviewer'; m.onclick = e => { if (e.target === m) m.style.display = 'none'; }; document.body.appendChild(m); }
+      m.innerHTML = '<div class="svbox"><div class="svhead"><b>📷 ' + esc(label) + '</b><button onclick="$(\'sViewer\').style.display=\'none\'">✕</button></div><div class="svbody">Loading…</div></div>';
+      m.style.display = 'flex';
+      const body = m.querySelector('.svbody');
+      adminCall('selfie', { id: id }, 60000).then(r => {
+        if (!r.ok) { body.innerHTML = '<span style="color:#b00020">' + esc(r.message) + '</span>'; return; }
+        body.innerHTML = '<img src="data:' + r.mime + ';base64,' + r.data + '">';
       }).catch(e => { body.innerHTML = '<span style="color:#b00020">Connection error: ' + esc(e.message) + '</span>'; });
     }
     function salesFind(kind, date) { const d = (aslData && aslData.days || []).find(x => x.date === date); return d ? (kind === 'deposit' ? d.deposit : d.sales) : null; }
